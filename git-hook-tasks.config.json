@@ -14,6 +14,10 @@
       {
         "name": "Check Formatting",
         "script": "test:fmt"
+      },
+      {
+        "name": "Unit tests",
+        "script": "test:unit"
       }
     ],
     "pre-commit": [],

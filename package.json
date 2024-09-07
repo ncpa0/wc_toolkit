@@ -1,0 +1,38 @@
+{
+  "name": "wc_toolkit",
+  "version": "1.0.0",
+  "main": "./dist/index.js",
+  "keywords": [],
+  "repository": {
+    "type": "git",
+    "url": ""
+  },
+  "description": "",
+  "license": "MIT",
+  "author": {
+    "name": "Szymon Bretner (ncpa0cpl)",
+    "email": ""
+  },
+  "scripts": {
+    "test:tsc": "tsc --noEmit",
+    "test:unit": "vitest run",
+    "prepare": "husky install",
+    "build": "node ./scripts/build.mjs",
+    "fix:lint": "oxlint --fix ./src",
+    "test:lint": "oxlint ./src",
+    "fix:fmt": "dprint fmt",
+    "test:fmt": "dprint check"
+  },
+  "packageManager": "yarn@1.22.22",
+  "devDependencies": {
+    "@ncpa0cpl/nodepack": "^2.3.3",
+    "dprint": "^0.47.2",
+    "esbuild": "^0.23.1",
+    "git-hook-tasks": "git+https://github.com/ncpa0cpl/git-hook-tasks#0.0.1",
+    "happy-dom": "^15.7.3",
+    "husky": "~8",
+    "oxlint": "^0.9.3",
+    "typescript": "^5.5.4",
+    "vitest": "^2.0.5"
+  }
+}

@@ -1,0 +1,78 @@
+diff --git a/node_modules/happy-dom/lib/event/EventTarget.js b/node_modules/happy-dom/lib/event/EventTarget.js
+index f3dddc8..7d6f9b0 100644
+--- a/node_modules/happy-dom/lib/event/EventTarget.js
++++ b/node_modules/happy-dom/lib/event/EventTarget.js
+@@ -3,6 +3,9 @@ import EventPhaseEnum from './EventPhaseEnum.js';
+ import WindowErrorUtility from '../window/WindowErrorUtility.js';
+ import WindowBrowserContext from '../window/WindowBrowserContext.js';
+ import BrowserErrorCaptureEnum from '../browser/enums/BrowserErrorCaptureEnum.js';
++
++const ALL_BROWSER_EVENTS = ["abort","afterprint","animationend","animationiteration","animationstart","beforeprint","beforeunload","blur","canplay","canplaythrough","change","click","contextmenu","copy","cut","dblclick","drag","dragend","dragenter","dragleave","dragover","dragstart","drop","durationchange","ended","error","focus","focusin","focusout","fullscreenchange","fullscreenerror","hashchange","input","invalid","keydown","keypress","keyup","load","loadeddata","loadedmetadata","loadstart","message","mousedown","mouseenter","mouseleave","mousemove","mouseover","mouseout","mouseup","mousewheel","offline","online","open","pagehide","pageshow","paste","pause","play","playing","popstate","progress","ratechange","resize","reset","scroll","search","seeked","seeking","select","show","stalled","storage","submit","suspend","timeupdate","toggle","touchcancel","touchend","touchmove","touchstart","transitionend","unload","volumechange","waiting","wheel"];
++
+ /**
+  * Handles events.
+  */
+@@ -170,17 +173,19 @@ export default class EventTarget {
+         const browserSettings = window ? new WindowBrowserContext(window).getSettings() : null;
+         const eventPhase = event.eventPhase === EventPhaseEnum.capturing ? 'capturing' : 'bubbling';
+         if (event.eventPhase !== EventPhaseEnum.capturing) {
+-            const onEventName = 'on' + event.type.toLowerCase();
+-            if (typeof this[onEventName] === 'function') {
+-                // We can end up in a never ending loop if the listener for the error event on Window also throws an error.
+-                if (window &&
+-                    (this !== window || event.type !== 'error') &&
+-                    !browserSettings?.disableErrorCapturing &&
+-                    browserSettings?.errorCapture === BrowserErrorCaptureEnum.tryAndCatch) {
+-                    WindowErrorUtility.captureError(window, this[onEventName].bind(this, event));
+-                }
+-                else {
+-                    this[onEventName].call(this, event);
++            if (ALL_BROWSER_EVENTS.includes(event.type.toLowerCase())) {
++                const onEventName = 'on' + event.type.toLowerCase();
++                if (typeof this[onEventName] === 'function') {
++                    // We can end up in a never ending loop if the listener for the error event on Window also throws an error.
++                    if (window &&
++                        (this !== window || event.type !== 'error') &&
++                        !browserSettings?.disableErrorCapturing &&
++                        browserSettings?.errorCapture === BrowserErrorCaptureEnum.tryAndCatch) {
++                        WindowErrorUtility.captureError(window, this[onEventName].bind(this, event));
++                    }
++                    else {
++                        this[onEventName].call(this, event);
++                    }
+                 }
+             }
+         }
+diff --git a/node_modules/happy-dom/lib/nodes/element/Element.js b/node_modules/happy-dom/lib/nodes/element/Element.js
+index 239c4a4..0be2d84 100644
+--- a/node_modules/happy-dom/lib/nodes/element/Element.js
++++ b/node_modules/happy-dom/lib/nodes/element/Element.js
+@@ -950,17 +950,17 @@ export default class Element extends Node {
+             !browserSettings.disableJavaScriptEvaluation &&
+             event.eventPhase === EventPhaseEnum.none &&
+             !event[PropertySymbol.immediatePropagationStopped]) {
+-            const attribute = this.getAttribute('on' + event.type);
+-            if (attribute && !event[PropertySymbol.immediatePropagationStopped]) {
+-                const code = `//# sourceURL=${this[PropertySymbol.window].location.href}\n${attribute}`;
+-                if (browserSettings.disableErrorCapturing ||
+-                    browserSettings.errorCapture !== BrowserErrorCaptureEnum.tryAndCatch) {
+-                    this[PropertySymbol.window].eval(code);
+-                }
+-                else {
+-                    WindowErrorUtility.captureError(this[PropertySymbol.window], () => this[PropertySymbol.window].eval(code));
+-                }
+-            }
++            // const attribute = this.getAttribute('on' + event.type);
++            // if (attribute && !event[PropertySymbol.immediatePropagationStopped]) {
++            //     const code = `//# sourceURL=${this[PropertySymbol.window].location.href}\n${attribute}`;
++            //     if (browserSettings.disableErrorCapturing ||
++            //         browserSettings.errorCapture !== BrowserErrorCaptureEnum.tryAndCatch) {
++            //         this[PropertySymbol.window].eval(code);
++            //     }
++            //     else {
++            //         WindowErrorUtility.captureError(this[PropertySymbol.window], () => this[PropertySymbol.window].eval(code));
++            //     }
++            // }
+         }
+         return returnValue;
+     }

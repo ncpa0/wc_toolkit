@@ -4,6 +4,8 @@ import { TypeForLiteral } from "./type.utils";
 export type AttrChangeEvDetail = { attributeName: string; previousValue: string; newValue: string };
 
 export class Attribute<K extends string, T extends TypeForLiteral<LiteralType>> {
+  private valueMemo: T | null = null;
+
   constructor(
     private readonly controller: AttributeController,
     private readonly attrType: LiteralType,
@@ -12,8 +14,12 @@ export class Attribute<K extends string, T extends TypeForLiteral<LiteralType>> 
     this.controller.registerProxy(this);
   }
 
+  protected clearMemo() {
+    this.valueMemo = null;
+  }
+
   private stringToAttrType(value: string | null): T | null {
-    let result: any = value;
+    let result: any;
 
     if (value == null) {
       if (this.attrType === "boolean") {
@@ -23,6 +29,9 @@ export class Attribute<K extends string, T extends TypeForLiteral<LiteralType>> 
     }
 
     switch (this.attrType) {
+      case "string":
+        result = value;
+        break;
       case "boolean":
         result = true;
         break;
@@ -34,15 +43,22 @@ export class Attribute<K extends string, T extends TypeForLiteral<LiteralType>> 
         break;
       case "number[]":
         result = value.split(",").map(Number);
+        break;
+      default:
+        result = this.attrType.fromString(value);
+        break;
     }
 
     return result;
   }
 
   private attrTypeToString(value: T): string | null {
-    let result: string | null = value as any;
+    let result: string | null;
 
     switch (this.attrType) {
+      case "string":
+        result = value as any;
+        break;
       case "boolean":
         result = value ? this.key : null;
         break;
@@ -55,17 +71,26 @@ export class Attribute<K extends string, T extends TypeForLiteral<LiteralType>> 
       case "number[]":
         result = (value as any[]).map(String).join(",");
         break;
+      default:
+        result = this.attrType.intoString(value);
+        break;
     }
 
     return result;
   }
 
   get(): T | null {
-    return this.stringToAttrType(this.controller.get(this.key)!);
+    if (this.valueMemo) {
+      return this.valueMemo;
+    }
+    const result = this.stringToAttrType(this.controller.get(this.key)!);
+    this.valueMemo = result;
+    return result;
   }
 
   set(value: T): void {
     const stringified = this.attrTypeToString(value);
+    this.valueMemo = value;
     if (stringified != null) {
       this.controller.set(this.key, stringified);
     } else {
@@ -74,6 +99,7 @@ export class Attribute<K extends string, T extends TypeForLiteral<LiteralType>> 
   }
 
   unset(): void {
+    this.valueMemo = null;
     this.controller.unset(this.key);
   }
 
@@ -100,6 +126,14 @@ export class AttributeController {
     this.attrProxies.set(attrProxy.key, attrProxy);
   }
 
+  getOrCreateProxy<L extends LiteralType>(attrName: string, attrType: L): Attribute<string, TypeForLiteral<L>> {
+    let p = this.attrProxies.get(attrName);
+    if (!p) {
+      p = new Attribute(this, attrType, attrName);
+    }
+    return p;
+  }
+
   getProxy(attrName: string) {
     return this.attrProxies.get(attrName);
   }
@@ -109,6 +143,7 @@ export class AttributeController {
     oldValue: string,
     newValue: string,
   ) {
+    this.getProxy(name)?.["clearMemo"]();
     this.emitter.dispatchEvent(
       new CustomEvent<AttrChangeEvDetail>(name, {
         detail: {
@@ -125,10 +160,12 @@ export class AttributeController {
   }
 
   set(attributeName: string, value: string) {
+    this.getProxy(attributeName)?.["clearMemo"]();
     this.element.setAttribute(attributeName, value);
   }
 
   unset(attributeName: string) {
+    this.getProxy(attributeName)?.["clearMemo"]();
     this.element.removeAttribute(attributeName);
   }
 

@@ -1,12 +1,12 @@
-import { Attribute, AttributeController } from "./attribute";
+import { AttributeController } from "./attribute";
 import { AttributesDefinitions, EventsDefinitions } from "./custom_element";
 import { AttributeApi } from "./type.utils";
 
-export class CustomElementEvent<Details> extends Event {
-  cancelable = true;
+export type NamedEvent<Name extends string> = Event & { type: Name };
 
+export class CustomElementEvent<Details> extends Event {
   constructor(eventName: string, public readonly details?: Details) {
-    super(eventName);
+    super(eventName, { cancelable: true });
   }
 }
 
@@ -21,18 +21,36 @@ export class MethodsApi<
     protected readonly _thisElement: HTMLElement,
     public readonly context: Ctx,
     protected readonly attributeController: AttributeController,
-    protected readonly contentContainer: HTMLDivElement,
+    protected readonly root: HTMLElement | ShadowRoot,
     attributes: Attr,
   ) {
     this.attribute = Object.fromEntries(
       Object.entries(attributes).map(([k, def]) => {
-        return [k, new Attribute(attributeController, def, k)];
+        return [k, attributeController.getOrCreateProxy(k, def)];
       }),
     ) as AttributeApi<Attr>;
   }
 
   get thisElement(): HTMLElement {
     return this._thisElement;
+  }
+
+  get isMounted(): boolean {
+    // @ts-expect-error
+    return this._thisElement.isMounted;
+  }
+
+  /**
+   * Replaces the content of the element with the given value.
+   */
+  render(newContent: Element | string): void {
+    this.root.innerHTML = "";
+    if (typeof newContent === "string") {
+      const textNode = document.createTextNode(newContent);
+      this.root.append(textNode);
+    } else {
+      this.root.append(newContent);
+    }
   }
 
   getChildren(): Array<Element | Text> {
@@ -44,18 +62,37 @@ export class MethodsApi<
     });
   }
 
-  emitEvent(eventName: Evnts[number], details?: any): EmitEventResult {
-    const event = new CustomElementEvent(eventName, details);
+  emitEvent(event: NamedEvent<Lowercase<Evnts[number]>>): EmitEventResult;
+  emitEvent(eventName: Lowercase<Evnts[number]>, details?: any): EmitEventResult;
+  emitEvent(arg0: string | Event, arg1?: any): EmitEventResult {
+    let event: Event;
+    if (typeof arg0 === "string") {
+      event = new CustomElementEvent(arg0, arg1);
+    } else {
+      event = arg0;
+    }
 
-    const prevented = this._thisElement.dispatchEvent(event);
+    const shouldCommit = this._thisElement.dispatchEvent(event);
 
-    if (prevented) {
-      return { then(_: () => void) {} };
+    if (shouldCommit) {
+      return {
+        onCommit(cb: () => void) {
+          cb();
+          return this;
+        },
+        onCancel(cb: () => void) {
+          return this;
+        },
+      };
     }
 
     return {
-      then(cb: () => void) {
+      onCommit(cb: () => void) {
+        return this;
+      },
+      onCancel(cb: () => void) {
         cb();
+        return this;
       },
     };
   }
@@ -64,7 +101,12 @@ export class MethodsApi<
 type EmitEventResult = {
   /**
    * Adds callback that will be called after the event is dispatched, if it was
-   * not cancelled. (event can be cancelled by calling `preventDefault()` on it)
+   * NOT cancelled. (event can be cancelled by calling `preventDefault()` on it)
    */
-  then(cb: () => void): void;
+  onCommit(cb: () => void): EmitEventResult;
+  /**
+   * Adds callback that will be called after the event is dispatched if that event was cancelled.
+   * (event can be cancelled by calling `preventDefault()` on it)
+   */
+  onCancel(cb: () => void): EmitEventResult;
 };

@@ -16,11 +16,11 @@ export class MainFuncApi<
     attributeController: AttributeController,
     public readonly context: Ctx,
     public readonly method: Methods,
-    contentContainer: HTMLDivElement,
+    root: HTMLElement | ShadowRoot,
     public readonly childrenPortal: HTMLDivElement,
     attributes: Attr,
   ) {
-    super(thisElement, context, attributeController, contentContainer, attributes);
+    super(thisElement, context, attributeController, root, attributes);
   }
 
   protected mutationObservedCallback(mutationRecords: MutationRecord[]) {
@@ -57,19 +57,6 @@ export class MainFuncApi<
       });
 
       this.cleanups.push(unbind);
-    }
-  }
-
-  /**
-   * Replaces the content of the element with the given value.
-   */
-  render(newContent: Element | string): void {
-    this.contentContainer.innerHTML = "";
-    if (typeof newContent === "string") {
-      const textNode = document.createTextNode(newContent);
-      this.contentContainer.append(textNode);
-    } else {
-      this.contentContainer.append(newContent);
     }
   }
 }

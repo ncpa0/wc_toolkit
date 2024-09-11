@@ -28,7 +28,8 @@
     "fix:lint": "oxlint --fix ./src",
     "test:lint": "oxlint ./src",
     "fix:fmt": "dprint fmt",
-    "test:fmt": "dprint check"
+    "test:fmt": "dprint check",
+    "postinstall": "patch-package"
   },
   "packageManager": "yarn@1.22.22",
   "devDependencies": {

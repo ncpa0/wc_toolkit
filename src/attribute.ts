@@ -1,5 +1,5 @@
-import { LiteralType } from "./custom_element";
-import { TypeForLiteral } from "./type.utils";
+import { AttributesDefinitions, LiteralType } from "./custom_element";
+import { AttributeApi, TypeForLiteral } from "./type.utils";
 
 export type AttrChangeEvDetail = { attributeName: string; previousValue: string; newValue: string };
 
@@ -135,6 +135,15 @@ export class AttributeController {
   constructor(
     private readonly element: HTMLElement,
   ) {}
+
+  getAttributesApi<Attr extends AttributesDefinitions>(attributes: Attr) {
+    const api = Object.fromEntries(
+      Object.entries(attributes).map(([k, def]) => {
+        return [k, this.getOrCreateProxy(k, def)];
+      }),
+    ) as AttributeApi<Attr>;
+    return api;
+  }
 
   registerProxy(attrProxy: Attribute<string, any>) {
     this.attrProxies.set(attrProxy.key, attrProxy);

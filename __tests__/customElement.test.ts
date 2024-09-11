@@ -19,7 +19,7 @@ describe("customElement", () => {
           },
         };
       })
-      .main(api => {
+      .connected(api => {
         const template = () => {
           const div = document.createElement("div");
           div.innerHTML = `
@@ -135,7 +135,7 @@ describe("customElement", () => {
       .methods(() => {
         return {};
       })
-      .main(api => {
+      .connected(api => {
         const template = () => {
           const div = document.createElement("div");
           div.innerHTML = `
@@ -209,7 +209,7 @@ describe("customElement", () => {
       .methods(() => {
         return {};
       })
-      .main(api => {
+      .connected(api => {
         const template = () => {
           const div = document.createElement("div");
           div.className = "portal-wrapper";
@@ -289,7 +289,7 @@ describe("customElement", () => {
           },
         };
       })
-      .main(api => {
+      .connected(api => {
         const template = () => {
           const div = document.createElement("div");
           div.innerHTML = `
@@ -355,7 +355,7 @@ describe("customElement", () => {
       .events()
       .context()
       .methods()
-      .main((api) => {
+      .connected((api) => {
         const { attribute } = api;
         api.onChange([attribute.foo, attribute.bar, attribute.baz], () => {
           onchange();
@@ -420,7 +420,7 @@ describe("customElement", () => {
             });
         },
       }))
-      .main((api) => {})
+      .connected((api) => {})
       .register();
 
     const elem = document.createElement("custom-elem-test6") as any as InstanceType<typeof CustomElement>;
@@ -485,7 +485,7 @@ describe("customElement", () => {
           },
         };
       })
-      .main(api => {})
+      .connected(api => {})
       .register();
 
     const html = `<custom-elem-test7 oncustomevent="event.target.loopback(event)"></custom-elem-test7>`;

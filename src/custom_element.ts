@@ -1,10 +1,11 @@
-import { addStyles } from "./add-styles";
+import { addStyles } from "./add_styles";
 import { AttributeController } from "./attribute";
 import { FunctionAttributeParser } from "./function-parser";
-import { MainFuncApi } from "./main_fn_api";
+import { ConnectedCallbackApi } from "./main_fn_api";
 import { MethodsApi } from "./methods_api";
 import {
   AttributeAccessors,
+  AttributeApi,
   AttributeParser,
   EvenListenerFunctions,
   EventAttributeAcessors,
@@ -69,11 +70,13 @@ export function customElement(tagName: string, options?: CustomElementOptions) {
              * Context can be used to store the internal state of the custom element. `getContext` param should
              * return the initial context value, it will be called once for every instance of the custom element.
              */
-            context<Ctx extends object = {}>(getContext: () => Ctx = () => ({} as any)) {
+            context<Ctx extends object = {}>(getContext: (attributes: AttributeApi<Attr>) => Ctx = () => ({} as any)) {
               return {
                 /**
                  * Define the methods of the custom element. These methods can be later called via the api
                  * object given to the main function or on the instance of the custom element.
+                 *
+                 * `getMethods` argument will be called in the constructor of the custom element.
                  */
                 methods<Methods extends MethodsDefinitions = {}>(
                   getMethods: (
@@ -82,12 +85,14 @@ export function customElement(tagName: string, options?: CustomElementOptions) {
                 ) {
                   return {
                     /**
-                     * The main function of the custom element. This function will be called every time
-                     * a custom element is mounted.
+                     * The main function of the custom element.
+                     *
+                     * `onConnectedCallback` argument will be called every time the custom element is
+                     * mounted in the document, (same as `connectedCallback` in standard web components).
                      */
-                    main(
-                      mainFn: (
-                        api: MainFuncApi<Attr, Evnts, Ctx, Methods>,
+                    connected(
+                      onConnectedCallback: (
+                        api: ConnectedCallbackApi<Attr, Evnts, Ctx, Methods>,
                       ) => void | (() => void),
                     ) {
                       const observedAttributes = Object.keys(attributes);
@@ -118,7 +123,9 @@ export function customElement(tagName: string, options?: CustomElementOptions) {
 
                         private readonly attributeController = new AttributeController(this);
                         private readonly cleanups: Array<() => void> = [];
-                        private readonly _context = getContext();
+                        private readonly _context = getContext(
+                          this.attributeController.getAttributesApi(attributes),
+                        );
                         private readonly _methodsApi = new MethodsApi(
                           this,
                           this._context,
@@ -127,7 +134,7 @@ export function customElement(tagName: string, options?: CustomElementOptions) {
                           attributes,
                         );
                         private readonly _methods = getMethods(this._methodsApi);
-                        private readonly _mainFuncApi = new MainFuncApi(
+                        private readonly _mainFuncApi = new ConnectedCallbackApi(
                           this,
                           this.cleanups,
                           this.attributeController,
@@ -237,7 +244,7 @@ export function customElement(tagName: string, options?: CustomElementOptions) {
 
                           this._cloneChildrenIntoPortal();
 
-                          const cleanup = mainFn(this._mainFuncApi);
+                          const cleanup = onConnectedCallback(this._mainFuncApi);
                           if (cleanup) {
                             this.cleanups.push(cleanup);
                           }

@@ -24,11 +24,7 @@ export class MethodsApi<
     protected readonly root: HTMLElement | ShadowRoot,
     attributes: Attr,
   ) {
-    this.attribute = Object.fromEntries(
-      Object.entries(attributes).map(([k, def]) => {
-        return [k, attributeController.getOrCreateProxy(k, def)];
-      }),
-    ) as AttributeApi<Attr>;
+    this.attribute = attributeController.getAttributesApi(attributes);
   }
 
   get thisElement(): HTMLElement {

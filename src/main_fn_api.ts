@@ -2,7 +2,7 @@ import { Attribute, AttributeController } from "./attribute";
 import { AttributesDefinitions, EventsDefinitions, MethodsDefinitions } from "./custom_element";
 import { MethodsApi } from "./methods_api";
 
-export class MainFuncApi<
+export class ConnectedCallbackApi<
   Attr extends AttributesDefinitions,
   Evnts extends EventsDefinitions,
   Ctx extends object,
@@ -58,5 +58,9 @@ export class MainFuncApi<
 
       this.cleanups.push(unbind);
     }
+  }
+
+  deferCleanup(cb: () => void): void {
+    this.cleanups.push(cb);
   }
 }

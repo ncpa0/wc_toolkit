@@ -1,5 +1,5 @@
 import { Attribute } from "./attribute";
-import { AttributesDefinitions, EventsDefinitions, LiteralType } from "./custom_element";
+import { AttributesDefinitions, EventsDefinitions, LiteralType, MethodsDefinitions } from "./custom_element";
 
 type DeepReadonly<T> = T extends object ? { readonly [K in keyof T]: DeepReadonly<T[K]> } : Readonly<T>;
 
@@ -35,6 +35,10 @@ export type AttributeAccessors<Attr extends AttributesDefinitions> = {
 
 export type EventAttributeAcessors<Evnts extends EventsDefinitions> = {
   [K in Evnts[number] as `on${Lowercase<K>}`]: (event: Event) => void | null;
+};
+
+export type PublicMethods<Methods extends MethodsDefinitions> = {
+  [K in keyof Methods as K extends `_${string}` ? never : K]: Methods[K];
 };
 
 export type EvenListenerFunctions<Evnts extends EventsDefinitions> = {

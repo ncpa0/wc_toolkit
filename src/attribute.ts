@@ -3,22 +3,34 @@ import { TypeForLiteral } from "./type.utils";
 
 export type AttrChangeEvDetail = { attributeName: string; previousValue: string; newValue: string };
 
-export class Attribute<K extends string, T extends TypeForLiteral<LiteralType>> {
+export class Attribute<K extends string, T> {
+  public static new = <K extends string, T>(controller: AttributeController, attrType: LiteralType, key: K) => {
+    return new Attribute(controller, attrType, key);
+  };
+
+  static extend(getExtended: (constructor: typeof Attribute) => typeof Attribute) {
+    const NewConstructor = getExtended(Attribute as any);
+    Attribute.new = <K extends string, T>(controller: AttributeController, attrType: LiteralType, key: K) => {
+      return new NewConstructor(controller, attrType, key);
+    };
+  }
+
   private valueMemo: T | null = null;
 
   constructor(
     private readonly controller: AttributeController,
-    private readonly attrType: LiteralType,
+    protected readonly attrType: LiteralType,
     public readonly key: K,
   ) {
     this.controller.registerProxy(this);
+    this.onCreatedCallback();
   }
 
-  protected clearMemo() {
+  private clearMemo() {
     this.valueMemo = null;
   }
 
-  private stringToAttrType(value: string | null): T | null {
+  protected stringToAttrType(value: string | null): T | null {
     let result: any;
 
     if (value == null) {
@@ -52,7 +64,7 @@ export class Attribute<K extends string, T extends TypeForLiteral<LiteralType>> 
     return result;
   }
 
-  private attrTypeToString(value: T): string | null {
+  protected attrTypeToString(value: T): string | null {
     let result: string | null;
 
     switch (this.attrType) {
@@ -112,6 +124,8 @@ export class Attribute<K extends string, T extends TypeForLiteral<LiteralType>> 
       this.controller.removeEventListener(this.key, listenerHandler);
     };
   }
+
+  protected onCreatedCallback() {}
 }
 
 export class AttributeController {
@@ -129,7 +143,7 @@ export class AttributeController {
   getOrCreateProxy<L extends LiteralType>(attrName: string, attrType: L): Attribute<string, TypeForLiteral<L>> {
     let p = this.attrProxies.get(attrName);
     if (!p) {
-      p = new Attribute(this, attrType, attrName);
+      p = Attribute.new(this, attrType, attrName);
     }
     return p;
   }

@@ -3,7 +3,13 @@ import { AttributeController } from "./attribute";
 import { FunctionAttributeParser } from "./function-parser";
 import { MainFuncApi } from "./main_fn_api";
 import { MethodsApi } from "./methods_api";
-import { AttributeAccessors, AttributeParser, EvenListenerFunctions, EventAttributeAcessors } from "./type.utils";
+import {
+  AttributeAccessors,
+  AttributeParser,
+  EvenListenerFunctions,
+  EventAttributeAcessors,
+  PublicMethods,
+} from "./type.utils";
 import { toCamelCase } from "./utils";
 
 export type CustomElementOptions = {
@@ -37,7 +43,7 @@ export type CustomElement<
 > = {
   new():
     & HTMLElement
-    & Methods
+    & PublicMethods<Methods>
     & AttributeAccessors<Attr>
     & EventAttributeAcessors<Evnts>
     & EvenListenerFunctions<Evnts>;

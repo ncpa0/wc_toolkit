@@ -21,7 +21,7 @@ async function main() {
     declarations: true,
     watch: watch,
     esbuildOptions: {
-      minify: !isDev,
+      minify: false,
       sourcemap: isDev ? "inline" : false,
     },
   };

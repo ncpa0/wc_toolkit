@@ -1,5 +1,9 @@
 const style = document.createElement("style");
 style.textContent = /* css */ `
+._wc_toolkit_content_container {
+  display: contents;
+}
+
 ._wc_toolkit_custom_element > *:not(._wc_toolkit_content_container) {
   display: none !important;
 }

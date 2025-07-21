@@ -6,7 +6,7 @@ const sleep = (ms: number = 0) => new Promise(resolve => setTimeout(resolve, ms)
 describe("customElement", () => {
   it("calls callbacks on attribute change", async () => {
     const { CustomElement } = customElement("custom-elem-test1")
-      .attributes({ foo: "string", bar: "number[]", "user-name": "string" })
+      .attributes({ foo: "string", bar: "number[]", userName: "string" })
       .events([])
       .context(() => ({}))
       .methods(({ attribute }) => {
@@ -25,25 +25,24 @@ describe("customElement", () => {
           div.innerHTML = `
               <span>${api.attribute.foo.get() ?? "not set"}</span>
               <span>${api.attribute.bar.get()?.join(", ") ?? "not set"}</span>
-              <span>${api.attribute["user-name"].get() ?? "not set"}</span>
+              <span>${api.attribute.userName.get() ?? "not set"}</span>
             `;
           return div;
         };
 
-        api.render(template());
+        api.replace(template());
 
         api.onChange([
           api.attribute.foo,
           api.attribute.bar,
-          api.attribute["user-name"],
+          api.attribute.userName,
         ], () => {
-          api.render(template());
+          api.replace(template());
         });
       })
       .register();
 
-    // @ts-expect-error
-    expect(CustomElement.observedAttributes).toEqual(["foo", "bar", "user-name"]);
+    expect(CustomElement.observedAttributes).toEqual(["foo", "bar", "username"]);
 
     const elem = document.createElement("custom-elem-test1") as any as InstanceType<typeof CustomElement>;
 
@@ -79,7 +78,7 @@ describe("customElement", () => {
     elem.userName = "John Doe";
     await sleep(0);
     expect(elem.outerHTML).toMatchInlineSnapshot(`
-      "<custom-elem-test1 class="_wc_toolkit_custom_element" foo="foo" bar="4,20" user-name="John Doe"><div class="_wc_toolkit_content_container"><div>
+      "<custom-elem-test1 class="_wc_toolkit_custom_element" foo="foo" bar="4,20" username="John Doe"><div class="_wc_toolkit_content_container"><div>
                     <span>foo</span>
                     <span>4, 20</span>
                     <span>John Doe</span>
@@ -89,7 +88,7 @@ describe("customElement", () => {
     elem.setAttribute("foo", "BOOBARBAZ");
     await sleep(0);
     expect(elem.outerHTML).toMatchInlineSnapshot(`
-      "<custom-elem-test1 class="_wc_toolkit_custom_element" foo="BOOBARBAZ" bar="4,20" user-name="John Doe"><div class="_wc_toolkit_content_container"><div>
+      "<custom-elem-test1 class="_wc_toolkit_custom_element" foo="BOOBARBAZ" bar="4,20" username="John Doe"><div class="_wc_toolkit_content_container"><div>
                     <span>BOOBARBAZ</span>
                     <span>4, 20</span>
                     <span>John Doe</span>
@@ -99,17 +98,17 @@ describe("customElement", () => {
     elem.setAttribute("bar", "6,9,6,9");
     await sleep(0);
     expect(elem.outerHTML).toMatchInlineSnapshot(`
-      "<custom-elem-test1 class="_wc_toolkit_custom_element" foo="BOOBARBAZ" bar="6,9,6,9" user-name="John Doe"><div class="_wc_toolkit_content_container"><div>
+      "<custom-elem-test1 class="_wc_toolkit_custom_element" foo="BOOBARBAZ" bar="6,9,6,9" username="John Doe"><div class="_wc_toolkit_content_container"><div>
                     <span>BOOBARBAZ</span>
                     <span>6, 9, 6, 9</span>
                     <span>John Doe</span>
                   </div></div></custom-elem-test1>"
     `);
 
-    elem.setAttribute("user-name", "Billy Smith");
+    elem.setAttribute("username", "Billy Smith");
     await sleep(0);
     expect(elem.outerHTML).toMatchInlineSnapshot(`
-      "<custom-elem-test1 class="_wc_toolkit_custom_element" foo="BOOBARBAZ" bar="6,9,6,9" user-name="Billy Smith"><div class="_wc_toolkit_content_container"><div>
+      "<custom-elem-test1 class="_wc_toolkit_custom_element" foo="BOOBARBAZ" bar="6,9,6,9" username="Billy Smith"><div class="_wc_toolkit_content_container"><div>
                     <span>BOOBARBAZ</span>
                     <span>6, 9, 6, 9</span>
                     <span>Billy Smith</span>
@@ -119,7 +118,7 @@ describe("customElement", () => {
     elem.doThing("hello world!", [0, 0, 0, 1, 0, 0, 0]);
     await sleep(0);
     expect(elem.outerHTML).toMatchInlineSnapshot(`
-      "<custom-elem-test1 class="_wc_toolkit_custom_element" foo="hello world!" bar="0,0,0,1,0,0,0" user-name="Billy Smith"><div class="_wc_toolkit_content_container"><div>
+      "<custom-elem-test1 class="_wc_toolkit_custom_element" foo="hello world!" bar="0,0,0,1,0,0,0" username="Billy Smith"><div class="_wc_toolkit_content_container"><div>
                     <span>hello world!</span>
                     <span>0, 0, 0, 1, 0, 0, 0</span>
                     <span>Billy Smith</span>
@@ -144,11 +143,11 @@ describe("customElement", () => {
           return div;
         };
 
-        api.render(template());
+        api.replace(template());
 
         api.onChildrenChange(children => {
           api.context.options = children.map(child => child.textContent ?? "");
-          api.render(template());
+          api.replace(template());
         });
       })
       .register();
@@ -165,7 +164,7 @@ describe("customElement", () => {
     const option1 = document.createElement("option");
     option1.textContent = "option1";
     elem.appendChild(option1);
-    await sleep(0);
+    await sleep(10);
     expect(elem.outerHTML).toMatchInlineSnapshot(`
       "<custom-elem-test2 class="_wc_toolkit_custom_element"><div class="_wc_toolkit_content_container"><div>
                     <span>Options: option1</span>
@@ -175,7 +174,7 @@ describe("customElement", () => {
     const option2 = document.createElement("option");
     option2.textContent = "option2";
     elem.appendChild(option2);
-    await sleep(0);
+    await sleep(10);
     expect(elem.outerHTML).toMatchInlineSnapshot(`
       "<custom-elem-test2 class="_wc_toolkit_custom_element"><div class="_wc_toolkit_content_container"><div>
                     <span>Options: option1, option2</span>
@@ -185,7 +184,7 @@ describe("customElement", () => {
     const option3 = document.createElement("option");
     option3.textContent = "option3";
     elem.appendChild(option3);
-    await sleep(0);
+    await sleep(10);
     expect(elem.outerHTML).toMatchInlineSnapshot(`
       "<custom-elem-test2 class="_wc_toolkit_custom_element"><div class="_wc_toolkit_content_container"><div>
                     <span>Options: option1, option2, option3</span>
@@ -193,7 +192,7 @@ describe("customElement", () => {
     `);
 
     option2.remove();
-    await sleep(0);
+    await sleep(10);
     expect(elem.outerHTML).toMatchInlineSnapshot(`
       "<custom-elem-test2 class="_wc_toolkit_custom_element"><div class="_wc_toolkit_content_container"><div>
                     <span>Options: option1, option3</span>
@@ -217,7 +216,7 @@ describe("customElement", () => {
           return div;
         };
 
-        api.render(template());
+        api.replace(template());
       })
       .register();
 
@@ -299,10 +298,10 @@ describe("customElement", () => {
           return div;
         };
 
-        api.render(template());
+        api.replace(template());
 
         api.attribute.state.onChange(() => {
-          api.render(template());
+          api.replace(template());
         });
       })
       .register();
@@ -495,7 +494,7 @@ describe("customElement", () => {
     >;
 
     expect(elem.outerHTML).toMatchInlineSnapshot(
-      `"<custom-elem-test7 class="_wc_toolkit_custom_element" oncustomevent="event.target.loopback(event)"><div class="_wc_toolkit_content_container"></div></custom-elem-test7>"`,
+      `"<custom-elem-test7 oncustomevent="event.target.loopback(event)" class="_wc_toolkit_custom_element"><div class="_wc_toolkit_content_container"></div></custom-elem-test7>"`,
     );
 
     expect(elem).toBeInstanceOf(CustomElement);
@@ -512,7 +511,7 @@ describe("customElement", () => {
     };
 
     expect(elem.outerHTML).toMatchInlineSnapshot(
-      `"<custom-elem-test7 class="_wc_toolkit_custom_element" oncustomevent="event.target.loopback(event)"><div class="_wc_toolkit_content_container"></div></custom-elem-test7>"`,
+      `"<custom-elem-test7 oncustomevent="event.target.loopback(event)" class="_wc_toolkit_custom_element"><div class="_wc_toolkit_content_container"></div></custom-elem-test7>"`,
     );
 
     elem.triggerViewed();

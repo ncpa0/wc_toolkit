@@ -6,17 +6,20 @@ import { MethodsApi } from "./methods_api";
 import {
   AttributeAccessors,
   AttributeApi,
+  AttributeDefToNames,
   AttributeParser,
   EvenListenerFunctions,
   EventAttributeAcessors,
   PublicMethods,
 } from "./type.utils";
-import { toCamelCase } from "./utils";
+import { ALL_BROWSER_EVENTS, mirroredNode, toAttributeName } from "./utils";
 
 export type CustomElementOptions = {
   childrenPortal?: boolean;
   shadowRoot?: boolean;
   shadowRootInit?: ShadowRootInit;
+  noContent?: boolean;
+  observeSubtree?: boolean;
 };
 
 export type LiteralType =
@@ -42,21 +45,56 @@ export type CustomElement<
   Evnts extends EventsDefinitions,
   Methods extends MethodsDefinitions,
 > = {
+  readonly observedAttributes: readonly AttributeDefToNames<Attr>[];
+
   new():
     & HTMLElement
     & PublicMethods<Methods>
     & AttributeAccessors<Attr>
     & EventAttributeAcessors<Evnts>
-    & EvenListenerFunctions<Evnts>;
+    & EvenListenerFunctions<Evnts>
+    & {
+      readonly attributeNames: readonly AttributeDefToNames<Attr>[];
+    };
+};
+
+export type AttrOptions = {
+  /**
+   * Override the attribute name as used in the HTML. By default the
+   * property name provided is stripped of special characters and all
+   * upper case characters are changed to lower case.
+   */
+  htmlName?: string;
+  /**
+   * Whether the attribute value changes should be observed. When enabled,
+   * changes to the attribute value can be detected by adding a listener
+   * via a `onChange` api method.
+   *
+   * @default true
+   */
+  observe?: boolean;
+};
+
+export type AttributeOptionsMap<AttrKeys extends string | number | symbol> = {
+  [K in AttrKeys]?: AttrOptions;
 };
 
 export function customElement(tagName: string, options?: CustomElementOptions) {
-  const { childrenPortal = false, shadowRoot = false, shadowRootInit } = options ?? {};
+  const {
+    childrenPortal = false,
+    noContent = false,
+    observeSubtree = false,
+    shadowRoot = false,
+    shadowRootInit,
+  } = options ?? {};
   return {
     /**
      * Define the attributes of the custom element and the type of their values.
      */
-    attributes<Attr extends AttributesDefinitions = {}>(attributes: Attr = {} as Attr) {
+    attributes<Attr extends AttributesDefinitions = {}>(
+      attributes: Attr = {} as Attr,
+      attributeOptions?: AttributeOptionsMap<keyof Attr>,
+    ) {
       return {
         /**
          * Define what events can be emitted by the custom element. For every event, an attribute is
@@ -95,11 +133,20 @@ export function customElement(tagName: string, options?: CustomElementOptions) {
                         api: ConnectedCallbackApi<Attr, Evnts, Ctx, Methods>,
                       ) => void | (() => void),
                     ) {
-                      const observedAttributes = Object.keys(attributes);
+                      const observedAttributes = Object.keys(attributes).flatMap(attr => {
+                        const options = attributeOptions?.[attr];
+                        if (options?.observe === false) return [];
+                        return options?.htmlName ?? toAttributeName(attr);
+                      });
 
                       for (const eventType of events) {
-                        observedAttributes.push(`on${eventType}`);
+                        // only custom events need additional handling
+                        if (!ALL_BROWSER_EVENTS.includes(eventType)) {
+                          observedAttributes.push(`on${eventType}`);
+                        }
                       }
+
+                      Object.freeze(observedAttributes);
 
                       const getRoot = (elem: HTMLElement) => {
                         let root: HTMLElement | ShadowRoot;
@@ -115,8 +162,20 @@ export function customElement(tagName: string, options?: CustomElementOptions) {
                         return root;
                       };
 
-                      const elementConstructor = class CustomElement extends HTMLElement {
-                        static observedAttributes = observedAttributes;
+                      const initiateMethods = (methodsApi: MethodsApi<Attr, EventsDefinitions, Ctx>) => {
+                        const methods = getMethods(methodsApi);
+                        for (const key in methods) {
+                          const method = methods[key]!;
+                          // @ts-expect-error
+                          methods[key] = method.bind(methods);
+                        }
+                        return methods;
+                      };
+
+                      const elementConstructor = class WcToolkitCustomElement extends HTMLElement {
+                        static readonly NAME = tagName;
+                        static readonly observedAttributes = observedAttributes;
+                        readonly attributeNames = observedAttributes;
 
                         private readonly childrenContainer = document.createElement("div");
                         private readonly root: HTMLElement | ShadowRoot = getRoot(this);
@@ -124,16 +183,17 @@ export function customElement(tagName: string, options?: CustomElementOptions) {
                         private readonly attributeController = new AttributeController(this);
                         private readonly cleanups: Array<() => void> = [];
                         private readonly _context = getContext(
-                          this.attributeController.getAttributesApi(attributes),
+                          this.attributeController.getAttributesApi(attributes, attributeOptions),
                         );
                         private readonly _methodsApi = new MethodsApi(
                           this,
+                          this.cleanups,
                           this._context,
                           this.attributeController,
                           this.root,
                           attributes,
                         );
-                        private readonly _methods = getMethods(this._methodsApi);
+                        private readonly _methods = initiateMethods(this._methodsApi);
                         private readonly _mainFuncApi = new ConnectedCallbackApi(
                           this,
                           this.cleanups,
@@ -150,7 +210,6 @@ export function customElement(tagName: string, options?: CustomElementOptions) {
                         constructor() {
                           super();
 
-                          this.classList.add("_wc_toolkit_custom_element");
                           this.childrenContainer.className = "_wc_toolkit_children_container";
 
                           for (const key in this._methods) {
@@ -158,13 +217,20 @@ export function customElement(tagName: string, options?: CustomElementOptions) {
                               enumerable: false,
                               configurable: false,
                               writable: false,
-                              value: this._methods[key]!.bind(this._methods),
+                              value: this._methods[key]!,
                             });
                           }
 
                           for (const [key, value] of Object.entries(attributes)) {
-                            const attrProxy = this.attributeController.getOrCreateProxy(key, value);
-                            Object.defineProperty(this, toCamelCase(key), {
+                            if (key in this) {
+                              console.warn(
+                                `Property '${key}' already exists on the HTMLElement, cannot assign attribute accessor. [${tagName}]`,
+                              );
+                              continue;
+                            }
+
+                            const attrProxy = this.attributeController.getOrCreateProxy(key, value, attributeOptions);
+                            Object.defineProperty(this, key, {
                               enumerable: false,
                               configurable: false,
                               get: () => {
@@ -177,9 +243,15 @@ export function customElement(tagName: string, options?: CustomElementOptions) {
                           }
 
                           for (const eventType of events) {
+                            // only custom events need additional handling
+                            if (ALL_BROWSER_EVENTS.includes(eventType)) {
+                              continue;
+                            }
+
                             const attrProxy = this.attributeController.getOrCreateProxy(
                               `on${eventType}`,
                               FunctionAttributeParser,
+                              attributeOptions,
                             );
 
                             let attributeHandlerOverride: ((event: Event) => void) | null = null;
@@ -198,7 +270,16 @@ export function customElement(tagName: string, options?: CustomElementOptions) {
                               attributeHandler = attrProxy.get();
                             });
 
-                            Object.defineProperty(this, `on${eventType}`, {
+                            const accessorKey = `on${eventType}`;
+
+                            if (accessorKey in this) {
+                              console.warn(
+                                `Property '${accessorKey}' already exists on the HTMLElement, cannot assign event callback accessor. [${tagName}]`,
+                              );
+                              continue;
+                            }
+
+                            Object.defineProperty(this, accessorKey, {
                               enumerable: false,
                               configurable: false,
                               get: () => {
@@ -220,29 +301,38 @@ export function customElement(tagName: string, options?: CustomElementOptions) {
                           }
                         }
 
+                        private _portalCleanups: Array<() => void> = [];
                         private _cloneChildrenIntoPortal() {
+                          this._portalCleanups
+                            .splice(0, this._portalCleanups.length)
+                            .forEach((cleanup) => cleanup());
+
                           if (childrenPortal) {
                             this.childrenContainer.innerHTML = "";
                             for (const child of this.childNodes as any as Array<Element>) {
                               if ("classList" in child && child.classList.contains("_wc_toolkit_content_container")) {
                                 continue;
                               }
-                              const clone = child.cloneNode(true);
-                              this.childrenContainer.appendChild(clone);
+                              const mirrored = mirroredNode(child);
+                              this.childrenContainer.appendChild(mirrored.current());
+                              this._portalCleanups.push(mirrored.remove);
                             }
                           }
                         }
 
                         private mutationObserver?: MutationObserver;
                         connectedCallback() {
+                          this.classList.add("_wc_toolkit_custom_element");
                           addStyles();
                           this.isMounted = true;
 
-                          if (!(this.root instanceof ShadowRoot)) {
-                            this.append(this.root);
-                          }
+                          if (!noContent) {
+                            if (!(this.root instanceof ShadowRoot)) {
+                              this.append(this.root);
+                            }
 
-                          this._cloneChildrenIntoPortal();
+                            this._cloneChildrenIntoPortal();
+                          }
 
                           const cleanup = onConnectedCallback(this._mainFuncApi);
                           if (cleanup) {
@@ -250,21 +340,37 @@ export function customElement(tagName: string, options?: CustomElementOptions) {
                           }
 
                           this.mutationObserver = new MutationObserver((mutationRecords) => {
-                            this._cloneChildrenIntoPortal();
+                            if (!noContent) {
+                              const childLenghtCahnged = mutationRecords.some(r =>
+                                r.addedNodes.length > 0 || r.removedNodes.length > 0
+                              );
+                              if (childLenghtCahnged) {
+                                this._cloneChildrenIntoPortal();
+                              }
+                            }
                             this._mainFuncApi["mutationObservedCallback"](mutationRecords);
                           });
-                          this.mutationObserver.observe(this, { subtree: true, childList: true });
+                          this.mutationObserver.observe(this, {
+                            childList: true,
+                            characterData: true,
+                            subtree: observeSubtree,
+                          });
                           this.cleanups.push(() => {
                             this.mutationObserver!.disconnect();
                             this.mutationObserver = undefined;
+                          });
+                          setTimeout(() => {
+                            this._mainFuncApi["triggerChildrenChange"](true);
                           });
                         }
 
                         disconnectedCallback() {
                           this.isMounted = false;
 
-                          if (!(this.root instanceof ShadowRoot)) {
-                            this.root.remove();
+                          if (!noContent) {
+                            if (!(this.root instanceof ShadowRoot)) {
+                              this.root.remove();
+                            }
                           }
 
                           for (const cleanup of this.cleanups) {
@@ -283,7 +389,7 @@ export function customElement(tagName: string, options?: CustomElementOptions) {
                          * Register the custom element in the current window's CustomElementRegistry.
                          */
                         register(): { CustomElement: CustomElement<Attr, Evnts, Methods> } {
-                          customElements.define(tagName, elementConstructor);
+                          customElements.define(elementConstructor.NAME, elementConstructor);
                           return this;
                         },
                       };

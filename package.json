@@ -35,7 +35,7 @@
     "test:lint": "oxlint ./src",
     "fix:fmt": "dprint fmt",
     "test:fmt": "dprint check",
-    "postinstall": "patch-package"
+    "postinstall": "if [ -f \".postinstall\" ]; then patch-package; fi"
   },
   "packageManager": "yarn@1.22.22",
   "devDependencies": {

@@ -16,8 +16,13 @@ export class Attribute<K extends string, T> {
 
   static extend(getExtended: (constructor: typeof Attribute) => typeof Attribute) {
     const NewConstructor = getExtended(Attribute as any);
-    Attribute.new = <K extends string, T>(controller: AttributeController, attrType: LiteralType, key: K) => {
-      return new NewConstructor(controller, attrType, key);
+    Attribute.new = <K extends string, T>(
+      controller: AttributeController,
+      attrType: LiteralType,
+      key: K,
+      options?: AttrOptions,
+    ) => {
+      return new NewConstructor(controller, attrType, key, options);
     };
   }
 

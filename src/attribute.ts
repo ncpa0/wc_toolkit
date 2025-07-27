@@ -4,6 +4,8 @@ import { ListSerializer, toAttributeName } from "./utils";
 
 export type AttrChangeEvDetail = { attributeName: string; previousValue: string; newValue: string };
 
+const NEVER_CALLED = Symbol("CALLBACK_NEVER_CALLED");
+
 export class Attribute<K extends string, T> {
   public static new = <K extends string, T>(
     controller: AttributeController,
@@ -142,8 +144,12 @@ export class Attribute<K extends string, T> {
   }
 
   onChange(cb: (value: T | null) => void): () => void {
+    let lastValue: T | null | typeof NEVER_CALLED = NEVER_CALLED;
     const listenerHandler = (_: CustomEvent<AttrChangeEvDetail>) => {
-      cb(this.get());
+      const value = this.get();
+      if (value === lastValue) return;
+      lastValue = value;
+      cb(value);
     };
     this.controller.addEventListener(this.attrKey, listenerHandler);
     return () => {
@@ -200,6 +206,8 @@ export class AttributeController {
     oldValue: string,
     newValue: string,
   ) {
+    if (oldValue === newValue) return;
+
     this.getProxy(name)?.["clearMemo"]();
     this.emitter.dispatchEvent(
       new CustomEvent<AttrChangeEvDetail>(name, {

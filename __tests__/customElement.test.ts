@@ -48,7 +48,7 @@ describe("customElement", () => {
 
     document.body.appendChild(elem);
     expect(elem.outerHTML).toMatchInlineSnapshot(`
-      "<custom-elem-test1 class="_wc_toolkit_custom_element"><div class="_wc_toolkit_content_container"><div>
+      "<custom-elem-test1 class="_wc_toolkit_custom_element"><div class="_wc_toolkit_content_container" style="display: contents;"><div>
                     <span>not set</span>
                     <span>not set</span>
                     <span>not set</span>
@@ -58,7 +58,7 @@ describe("customElement", () => {
     elem.foo = "foo";
     await sleep(0);
     expect(elem.outerHTML).toMatchInlineSnapshot(`
-      "<custom-elem-test1 class="_wc_toolkit_custom_element" foo="foo"><div class="_wc_toolkit_content_container"><div>
+      "<custom-elem-test1 class="_wc_toolkit_custom_element" foo="foo"><div class="_wc_toolkit_content_container" style="display: contents;"><div>
                     <span>foo</span>
                     <span>not set</span>
                     <span>not set</span>
@@ -68,7 +68,7 @@ describe("customElement", () => {
     elem.bar = [4, 20];
     await sleep(0);
     expect(elem.outerHTML).toMatchInlineSnapshot(`
-      "<custom-elem-test1 class="_wc_toolkit_custom_element" foo="foo" bar="4,20"><div class="_wc_toolkit_content_container"><div>
+      "<custom-elem-test1 class="_wc_toolkit_custom_element" foo="foo" bar="4,20"><div class="_wc_toolkit_content_container" style="display: contents;"><div>
                     <span>foo</span>
                     <span>4, 20</span>
                     <span>not set</span>
@@ -78,7 +78,7 @@ describe("customElement", () => {
     elem.userName = "John Doe";
     await sleep(0);
     expect(elem.outerHTML).toMatchInlineSnapshot(`
-      "<custom-elem-test1 class="_wc_toolkit_custom_element" foo="foo" bar="4,20" username="John Doe"><div class="_wc_toolkit_content_container"><div>
+      "<custom-elem-test1 class="_wc_toolkit_custom_element" foo="foo" bar="4,20" username="John Doe"><div class="_wc_toolkit_content_container" style="display: contents;"><div>
                     <span>foo</span>
                     <span>4, 20</span>
                     <span>John Doe</span>
@@ -88,7 +88,7 @@ describe("customElement", () => {
     elem.setAttribute("foo", "BOOBARBAZ");
     await sleep(0);
     expect(elem.outerHTML).toMatchInlineSnapshot(`
-      "<custom-elem-test1 class="_wc_toolkit_custom_element" foo="BOOBARBAZ" bar="4,20" username="John Doe"><div class="_wc_toolkit_content_container"><div>
+      "<custom-elem-test1 class="_wc_toolkit_custom_element" foo="BOOBARBAZ" bar="4,20" username="John Doe"><div class="_wc_toolkit_content_container" style="display: contents;"><div>
                     <span>BOOBARBAZ</span>
                     <span>4, 20</span>
                     <span>John Doe</span>
@@ -98,7 +98,7 @@ describe("customElement", () => {
     elem.setAttribute("bar", "6,9,6,9");
     await sleep(0);
     expect(elem.outerHTML).toMatchInlineSnapshot(`
-      "<custom-elem-test1 class="_wc_toolkit_custom_element" foo="BOOBARBAZ" bar="6,9,6,9" username="John Doe"><div class="_wc_toolkit_content_container"><div>
+      "<custom-elem-test1 class="_wc_toolkit_custom_element" foo="BOOBARBAZ" bar="6,9,6,9" username="John Doe"><div class="_wc_toolkit_content_container" style="display: contents;"><div>
                     <span>BOOBARBAZ</span>
                     <span>6, 9, 6, 9</span>
                     <span>John Doe</span>
@@ -108,7 +108,7 @@ describe("customElement", () => {
     elem.setAttribute("username", "Billy Smith");
     await sleep(0);
     expect(elem.outerHTML).toMatchInlineSnapshot(`
-      "<custom-elem-test1 class="_wc_toolkit_custom_element" foo="BOOBARBAZ" bar="6,9,6,9" username="Billy Smith"><div class="_wc_toolkit_content_container"><div>
+      "<custom-elem-test1 class="_wc_toolkit_custom_element" foo="BOOBARBAZ" bar="6,9,6,9" username="Billy Smith"><div class="_wc_toolkit_content_container" style="display: contents;"><div>
                     <span>BOOBARBAZ</span>
                     <span>6, 9, 6, 9</span>
                     <span>Billy Smith</span>
@@ -118,7 +118,7 @@ describe("customElement", () => {
     elem.doThing("hello world!", [0, 0, 0, 1, 0, 0, 0]);
     await sleep(0);
     expect(elem.outerHTML).toMatchInlineSnapshot(`
-      "<custom-elem-test1 class="_wc_toolkit_custom_element" foo="hello world!" bar="0,0,0,1,0,0,0" username="Billy Smith"><div class="_wc_toolkit_content_container"><div>
+      "<custom-elem-test1 class="_wc_toolkit_custom_element" foo="hello world!" bar="0,0,0,1,0,0,0" username="Billy Smith"><div class="_wc_toolkit_content_container" style="display: contents;"><div>
                     <span>hello world!</span>
                     <span>0, 0, 0, 1, 0, 0, 0</span>
                     <span>Billy Smith</span>
@@ -156,7 +156,7 @@ describe("customElement", () => {
 
     document.body.appendChild(elem);
     expect(elem.outerHTML).toMatchInlineSnapshot(`
-      "<custom-elem-test2 class="_wc_toolkit_custom_element"><div class="_wc_toolkit_content_container"><div>
+      "<custom-elem-test2 class="_wc_toolkit_custom_element"><div class="_wc_toolkit_content_container" style="display: contents;"><div>
                     <span>Options: </span>
                   </div></div></custom-elem-test2>"
     `);
@@ -166,7 +166,7 @@ describe("customElement", () => {
     elem.appendChild(option1);
     await sleep(10);
     expect(elem.outerHTML).toMatchInlineSnapshot(`
-      "<custom-elem-test2 class="_wc_toolkit_custom_element"><div class="_wc_toolkit_content_container"><div>
+      "<custom-elem-test2 class="_wc_toolkit_custom_element"><div class="_wc_toolkit_content_container" style="display: contents;"><div>
                     <span>Options: option1</span>
                   </div></div><option>option1</option></custom-elem-test2>"
     `);
@@ -176,7 +176,7 @@ describe("customElement", () => {
     elem.appendChild(option2);
     await sleep(10);
     expect(elem.outerHTML).toMatchInlineSnapshot(`
-      "<custom-elem-test2 class="_wc_toolkit_custom_element"><div class="_wc_toolkit_content_container"><div>
+      "<custom-elem-test2 class="_wc_toolkit_custom_element"><div class="_wc_toolkit_content_container" style="display: contents;"><div>
                     <span>Options: option1, option2</span>
                   </div></div><option>option1</option><option>option2</option></custom-elem-test2>"
     `);
@@ -186,7 +186,7 @@ describe("customElement", () => {
     elem.appendChild(option3);
     await sleep(10);
     expect(elem.outerHTML).toMatchInlineSnapshot(`
-      "<custom-elem-test2 class="_wc_toolkit_custom_element"><div class="_wc_toolkit_content_container"><div>
+      "<custom-elem-test2 class="_wc_toolkit_custom_element"><div class="_wc_toolkit_content_container" style="display: contents;"><div>
                     <span>Options: option1, option2, option3</span>
                   </div></div><option>option1</option><option>option2</option><option>option3</option></custom-elem-test2>"
     `);
@@ -194,7 +194,7 @@ describe("customElement", () => {
     option2.remove();
     await sleep(10);
     expect(elem.outerHTML).toMatchInlineSnapshot(`
-      "<custom-elem-test2 class="_wc_toolkit_custom_element"><div class="_wc_toolkit_content_container"><div>
+      "<custom-elem-test2 class="_wc_toolkit_custom_element"><div class="_wc_toolkit_content_container" style="display: contents;"><div>
                     <span>Options: option1, option3</span>
                   </div></div><option>option1</option><option>option3</option></custom-elem-test2>"
     `);
@@ -224,7 +224,7 @@ describe("customElement", () => {
 
     document.body.appendChild(elem);
     expect(elem.outerHTML).toMatchInlineSnapshot(
-      `"<custom-elem-test3 class="_wc_toolkit_custom_element"><div class="_wc_toolkit_content_container"><div class="portal-wrapper"><div class="_wc_toolkit_children_container"></div></div></div></custom-elem-test3>"`,
+      `"<custom-elem-test3 class="_wc_toolkit_custom_element"><div class="_wc_toolkit_content_container" style="display: contents;"><div class="portal-wrapper"><div class="_wc_toolkit_children_container"></div></div></div></custom-elem-test3>"`,
     );
 
     const child1 = document.createElement("div");
@@ -233,7 +233,7 @@ describe("customElement", () => {
     elem.appendChild(child1);
     await sleep(0);
     expect(elem.outerHTML).toMatchInlineSnapshot(
-      `"<custom-elem-test3 class="_wc_toolkit_custom_element"><div class="_wc_toolkit_content_container"><div class="portal-wrapper"><div class="_wc_toolkit_children_container"><div>this is child1</div></div></div></div><div>this is child1</div></custom-elem-test3>"`,
+      `"<custom-elem-test3 class="_wc_toolkit_custom_element"><div class="_wc_toolkit_content_container" style="display: contents;"><div class="portal-wrapper"><div class="_wc_toolkit_children_container"><div>this is child1</div></div></div></div><div>this is child1</div></custom-elem-test3>"`,
     );
 
     const child2 = document.createElement("div");
@@ -241,20 +241,20 @@ describe("customElement", () => {
     elem.appendChild(child2);
     await sleep(0);
     expect(elem.outerHTML).toMatchInlineSnapshot(
-      `"<custom-elem-test3 class="_wc_toolkit_custom_element"><div class="_wc_toolkit_content_container"><div class="portal-wrapper"><div class="_wc_toolkit_children_container"><div>this is child1</div><div>this is child2</div></div></div></div><div>this is child1</div><div>this is child2</div></custom-elem-test3>"`,
+      `"<custom-elem-test3 class="_wc_toolkit_custom_element"><div class="_wc_toolkit_content_container" style="display: contents;"><div class="portal-wrapper"><div class="_wc_toolkit_children_container"><div>this is child1</div><div>this is child2</div></div></div></div><div>this is child1</div><div>this is child2</div></custom-elem-test3>"`,
     );
 
     child1.innerHTML = "<div><div class='abc'>abc</div></div>";
     await sleep(0);
     expect(elem.outerHTML).toMatchInlineSnapshot(
-      `"<custom-elem-test3 class="_wc_toolkit_custom_element"><div class="_wc_toolkit_content_container"><div class="portal-wrapper"><div class="_wc_toolkit_children_container"><div><div><div class="abc">abc</div></div></div><div>this is child2</div></div></div></div><div><div><div class="abc">abc</div></div></div><div>this is child2</div></custom-elem-test3>"`,
+      `"<custom-elem-test3 class="_wc_toolkit_custom_element"><div class="_wc_toolkit_content_container" style="display: contents;"><div class="portal-wrapper"><div class="_wc_toolkit_children_container"><div><div><div class="abc">abc</div></div></div><div>this is child2</div></div></div></div><div><div><div class="abc">abc</div></div></div><div>this is child2</div></custom-elem-test3>"`,
     );
 
     const abc = child1.querySelector(".abc")!;
     abc.textContent = "def";
     await sleep(0);
     expect(elem.outerHTML).toMatchInlineSnapshot(
-      `"<custom-elem-test3 class="_wc_toolkit_custom_element"><div class="_wc_toolkit_content_container"><div class="portal-wrapper"><div class="_wc_toolkit_children_container"><div><div><div class="abc">def</div></div></div><div>this is child2</div></div></div></div><div><div><div class="abc">def</div></div></div><div>this is child2</div></custom-elem-test3>"`,
+      `"<custom-elem-test3 class="_wc_toolkit_custom_element"><div class="_wc_toolkit_content_container" style="display: contents;"><div class="portal-wrapper"><div class="_wc_toolkit_children_container"><div><div><div class="abc">def</div></div></div><div>this is child2</div></div></div></div><div><div><div class="abc">def</div></div></div><div>this is child2</div></custom-elem-test3>"`,
     );
   });
 
@@ -310,7 +310,7 @@ describe("customElement", () => {
     document.body.appendChild(elem);
 
     expect(elem.outerHTML).toMatchInlineSnapshot(`
-      "<custom-elem-test4 class="_wc_toolkit_custom_element"><div class="_wc_toolkit_content_container"><div>
+      "<custom-elem-test4 class="_wc_toolkit_custom_element"><div class="_wc_toolkit_content_container" style="display: contents;"><div>
                     <span>not set</span>
                     <span>not set</span>
                   </div></div></custom-elem-test4>"
@@ -326,7 +326,7 @@ describe("customElement", () => {
     });
     await sleep(0);
     expect(elem.outerHTML).toMatchInlineSnapshot(`
-      "<custom-elem-test4 class="_wc_toolkit_custom_element" state="{&quot;foo&quot;:&quot;hello&quot;,&quot;bar&quot;:[1,2,3]}"><div class="_wc_toolkit_content_container"><div>
+      "<custom-elem-test4 class="_wc_toolkit_custom_element" state="{&quot;foo&quot;:&quot;hello&quot;,&quot;bar&quot;:[1,2,3]}"><div class="_wc_toolkit_content_container" style="display: contents;"><div>
                     <span>hello</span>
                     <span>1, 2, 3</span>
                   </div></div></custom-elem-test4>"
@@ -339,7 +339,7 @@ describe("customElement", () => {
     });
     await sleep(0);
     expect(elem.outerHTML).toMatchInlineSnapshot(`
-      "<custom-elem-test4 class="_wc_toolkit_custom_element" state="{&quot;foo&quot;:&quot;world&quot;,&quot;bar&quot;:[]}"><div class="_wc_toolkit_content_container"><div>
+      "<custom-elem-test4 class="_wc_toolkit_custom_element" state="{&quot;foo&quot;:&quot;world&quot;,&quot;bar&quot;:[]}"><div class="_wc_toolkit_content_container" style="display: contents;"><div>
                     <span>world</span>
                     <span></span>
                   </div></div></custom-elem-test4>"
@@ -494,7 +494,7 @@ describe("customElement", () => {
     >;
 
     expect(elem.outerHTML).toMatchInlineSnapshot(
-      `"<custom-elem-test7 oncustomevent="event.target.loopback(event)" class="_wc_toolkit_custom_element"><div class="_wc_toolkit_content_container"></div></custom-elem-test7>"`,
+      `"<custom-elem-test7 oncustomevent="event.target.loopback(event)" class="_wc_toolkit_custom_element"><div class="_wc_toolkit_content_container" style="display: contents;"></div></custom-elem-test7>"`,
     );
 
     expect(elem).toBeInstanceOf(CustomElement);
@@ -511,7 +511,7 @@ describe("customElement", () => {
     };
 
     expect(elem.outerHTML).toMatchInlineSnapshot(
-      `"<custom-elem-test7 oncustomevent="event.target.loopback(event)" class="_wc_toolkit_custom_element"><div class="_wc_toolkit_content_container"></div></custom-elem-test7>"`,
+      `"<custom-elem-test7 oncustomevent="event.target.loopback(event)" class="_wc_toolkit_custom_element"><div class="_wc_toolkit_content_container" style="display: contents;"></div></custom-elem-test7>"`,
     );
 
     elem.triggerViewed();

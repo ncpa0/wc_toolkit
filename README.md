@@ -2,6 +2,20 @@
 
 _A toolkit for building web-components with ease._
 
+## Installation
+
+```sh
+npm i wc_toolkit
+```
+
+For the custom elements created with wc_toolkit to appear correctly it's best to include the small css
+snippet which you can find in the `wc_toolkit/styles.css` file. If your bundler supports it you might
+be able to just simply import it from a js/ts file:
+
+```ts
+import "wc_toolkit/styles.css";
+```
+
 ## Example
 
 ```ts

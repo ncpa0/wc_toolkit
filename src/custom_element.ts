@@ -1,4 +1,3 @@
-import { addStyles } from "./add_styles";
 import { AttributeController } from "./attribute";
 import { FunctionAttributeParser } from "./function-parser";
 import { ConnectedCallbackApi } from "./main_fn_api";
@@ -157,6 +156,7 @@ export function customElement(tagName: string, options?: CustomElementOptions) {
                         } else {
                           root = document.createElement("div");
                           root.className = "_wc_toolkit_content_container";
+                          root.style.display = "contents";
                         }
 
                         return root;
@@ -323,7 +323,6 @@ export function customElement(tagName: string, options?: CustomElementOptions) {
                         private mutationObserver?: MutationObserver;
                         connectedCallback() {
                           this.classList.add("_wc_toolkit_custom_element");
-                          addStyles();
                           this.isMounted = true;
 
                           if (!noContent) {

@@ -5,9 +5,12 @@
   "types": "./dist/types/index.d.ts",
   "exports": {
     ".": {
+      "types": "./dist/types/index.d.ts",
       "import": "./dist/esm/index.mjs",
-      "require": "./dist/legacy/index.js",
-      "types": "./dist/types/index.d.ts"
+      "require": "./dist/legacy/index.js"
+    },
+    "./styles.css": {
+      "default": "./styles.css"
     }
   },
   "keywords": [],

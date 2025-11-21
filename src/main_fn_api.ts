@@ -47,9 +47,10 @@ export class ConnectedCallbackApi<
     public readonly method: Methods,
     root: HTMLElement | ShadowRoot,
     public readonly childrenPortal: HTMLDivElement,
+    protected readonly eventsRecord: Evnts,
     attributes: Attr,
   ) {
-    super(thisElement, cleanups, context, attributeController, root, attributes);
+    super(thisElement, cleanups, context, attributeController, root, eventsRecord, attributes);
   }
 
   private getHandler(v: unknown): DependencyHandler<any> {

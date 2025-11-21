@@ -1,6 +1,6 @@
 import { AttributeController } from "./attribute";
-import { AttributesDefinitions, EventsDefinitions } from "./custom_element";
-import { AttributeApi } from "./type.utils";
+import { AttributesDefinitions, EventNames, EventsDefinitions } from "./custom_element";
+import { AttributeApi, ConstructorArgs, Value } from "./type.utils";
 import { ListenerController } from "./utils";
 
 export type NamedEvent<Name extends string> = Event & { type: Name };
@@ -52,6 +52,7 @@ export class MethodsApi<
     public readonly context: Ctx,
     protected readonly attributeController: AttributeController,
     protected readonly root: HTMLElement | ShadowRoot,
+    protected readonly eventsRecord: Evnts,
     attributes: Attr,
   ) {
     this.attribute = attributeController.getAttributesApi(attributes);
@@ -157,14 +158,20 @@ export class MethodsApi<
     return controller;
   }
 
-  emitEvent(event: NamedEvent<Lowercase<Evnts[number]>>): EmitEventResult;
-  emitEvent(eventName: Lowercase<Evnts[number]>, details?: any): EmitEventResult;
-  emitEvent(arg0: string | Event, arg1?: any): EmitEventResult {
+  emitEvent<E extends Value<Evnts>>(event: InstanceType<E>): EmitEventResult;
+  emitEvent<K extends keyof Evnts>(eventName: K, ...args: ConstructorArgs<Evnts[K]>): EmitEventResult;
+  emitEvent(arg0: keyof Evnts | Event, ...rest: any[]): EmitEventResult {
     let event: Event;
     if (typeof arg0 === "string") {
-      event = new CustomElementEvent(arg0, arg1);
+      const Constructor = this.eventsRecord[arg0];
+
+      if (!Constructor) {
+        throw new Error(`invalid error type: '${arg0}'`);
+      }
+
+      event = new Constructor(arg0, ...rest);
     } else {
-      event = arg0;
+      event = arg0 as Event;
     }
 
     const shouldCommit = this._thisElement.dispatchEvent(event);

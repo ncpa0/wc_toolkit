@@ -2,6 +2,7 @@ import { Attribute } from "./attribute";
 import {
   AttributesDefinitions,
   CustomElement,
+  EventNames,
   EventsDefinitions,
   LiteralType,
   MethodsDefinitions,
@@ -49,7 +50,7 @@ export type AttributeDefToNames<Attr extends AttributesDefinitions> = PropNameTo
 >;
 
 export type EventAttributeAcessors<Evnts extends EventsDefinitions> = {
-  [K in Evnts[number] as `on${Lowercase<K>}`]: (event: Event) => void | null;
+  [K in EventNames<Evnts> as `on${Lowercase<K>}`]: ((event: InstanceType<Evnts[K]>) => void) | null;
 };
 
 export type PublicMethods<Methods extends MethodsDefinitions> = {
@@ -57,14 +58,25 @@ export type PublicMethods<Methods extends MethodsDefinitions> = {
 };
 
 export type EvenListenerFunctions<Evnts extends EventsDefinitions> = {
-  addEventListener<K extends keyof HTMLElementEventMap | Lowercase<Evnts[number]>>(
+  addEventListener<K extends keyof HTMLElementEventMap>(
     type: K,
-    listener: (this: HTMLElement, ev: K extends keyof HTMLElementEventMap ? HTMLElementEventMap[K] : Event) => any,
+    listener: (this: HTMLElement, ev: HTMLElementEventMap[K]) => any,
     options?: boolean | AddEventListenerOptions,
   ): void;
-  removeEventListener<K extends keyof HTMLElementEventMap | Lowercase<Evnts[number]>>(
+  removeEventListener<K extends keyof HTMLElementEventMap>(
     type: K,
-    listener: (this: HTMLElement, ev: K extends keyof HTMLElementEventMap ? HTMLElementEventMap[K] : Event) => any,
+    listener: (this: HTMLElement, ev: HTMLElementEventMap[K]) => any,
+    options?: boolean | EventListenerOptions,
+  ): void;
+} & {
+  addEventListener<K extends EventNames<Evnts>>(
+    type: K,
+    listener: (this: HTMLElement, ev: InstanceType<Evnts[K]>) => any,
+    options?: boolean | AddEventListenerOptions,
+  ): void;
+  removeEventListener<K extends EventNames<Evnts>>(
+    type: K,
+    listener: (this: HTMLElement, ev: InstanceType<Evnts[K]>) => any,
     options?: boolean | EventListenerOptions,
   ): void;
 };
@@ -101,10 +113,20 @@ export type AttributeNamesOf<E extends CustomElement<any, any, any>> = E extends
   ? keyof Attr
   : never;
 
+export type EventsOf<E extends CustomElement<any, any, any>> = E extends CustomElement<any, infer Evnts, any> ? Evnts
+  : {};
+
 export type EventNamesOf<E extends CustomElement<any, any, any>> = E extends CustomElement<any, infer Evnts, any>
-  ? Evnts[number]
+  ? EventNames<Evnts>
   : never;
 
 export type AttributesOf<E extends CustomElement<any, any, any>> = E extends CustomElement<infer Attr, any, any>
   ? { [K in keyof Attr]: TypeForLiteral<Attr[K]> | null }
   : never;
+
+export type Value<O extends object> = O extends Record<any, infer Values> ? Values : never;
+
+export type ConstructorArgs<C> = C extends {
+  new(type: string, ...args: infer Args): any;
+} ? Args
+  : [];

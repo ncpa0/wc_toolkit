@@ -33,7 +33,14 @@ export type AttributesDefinitions = {
   [k: string]: LiteralType;
 };
 
-export type EventsDefinitions = string[];
+export type EventConstructor<Args extends any[], Ev extends Event> = {
+  new(eventType: string, ...args: Args): Ev;
+};
+
+export type EventsDefinitions = Record<string, EventConstructor<any[], Event>>;
+
+export type EventNames<E extends EventsDefinitions> = E extends Record<infer Names extends string, any> ? Names
+  : never;
 
 export type MethodsDefinitions = {
   [k: string]: (...args: any[]) => any;
@@ -47,7 +54,7 @@ export type CustomElement<
   readonly observedAttributes: readonly AttributeDefToNames<Attr>[];
 
   new():
-    & HTMLElement
+    & Omit<HTMLElement, "addEventListener" | "removeEventListener">
     & PublicMethods<Methods>
     & AttributeAccessors<Attr>
     & EventAttributeAcessors<Evnts>
@@ -100,8 +107,8 @@ export function customElement(tagName: string, options?: CustomElementOptions) {
          * added to the custom element that can be set in html. `on${eventType}` properties are also added
          * to element instances that can be manipulated in JavaScript.
          */
-        events<const Evnts extends EventsDefinitions = []>(events: Evnts = [] as any) {
-          events = events.map(e => e.toLowerCase()) as any;
+        events<const Evnts extends EventsDefinitions = {}>(eventRecords: Evnts = ({} as any)) {
+          const events = Object.entries(eventRecords).map(([e, constructor]) => e);
           return {
             /**
              * Context can be used to store the internal state of the custom element. `getContext` param should
@@ -138,7 +145,8 @@ export function customElement(tagName: string, options?: CustomElementOptions) {
                         return options?.htmlName ?? toAttributeName(attr);
                       });
 
-                      for (const eventType of events) {
+                      for (let eventType of events) {
+                        eventType = eventType.toLowerCase();
                         // only custom events need additional handling
                         if (!ALL_BROWSER_EVENTS.includes(eventType)) {
                           observedAttributes.push(`on${eventType}`);
@@ -162,7 +170,7 @@ export function customElement(tagName: string, options?: CustomElementOptions) {
                         return root;
                       };
 
-                      const initiateMethods = (methodsApi: MethodsApi<Attr, EventsDefinitions, Ctx>) => {
+                      const initiateMethods = (methodsApi: MethodsApi<Attr, Evnts, Ctx>) => {
                         const methods = getMethods(methodsApi);
                         for (const key in methods) {
                           const method = methods[key]!;
@@ -191,6 +199,7 @@ export function customElement(tagName: string, options?: CustomElementOptions) {
                           this._context,
                           this.attributeController,
                           this.root,
+                          eventRecords,
                           attributes,
                         );
                         private readonly _methods = initiateMethods(this._methodsApi);
@@ -202,6 +211,7 @@ export function customElement(tagName: string, options?: CustomElementOptions) {
                           this._methods,
                           this.root,
                           this.childrenContainer,
+                          eventRecords,
                           attributes,
                         );
 
@@ -243,13 +253,16 @@ export function customElement(tagName: string, options?: CustomElementOptions) {
                           }
 
                           for (const eventType of events) {
+                            const lowercaseType = eventType.toLowerCase();
+                            const accessorKey = `on${lowercaseType}`;
+
                             // only custom events need additional handling
-                            if (ALL_BROWSER_EVENTS.includes(eventType)) {
+                            if (ALL_BROWSER_EVENTS.includes(lowercaseType)) {
                               continue;
                             }
 
                             const attrProxy = this.attributeController.getOrCreateProxy(
-                              `on${eventType}`,
+                              accessorKey,
                               FunctionAttributeParser,
                               attributeOptions,
                             );
@@ -269,8 +282,6 @@ export function customElement(tagName: string, options?: CustomElementOptions) {
                             attrProxy.onChange(() => {
                               attributeHandler = attrProxy.get();
                             });
-
-                            const accessorKey = `on${eventType}`;
 
                             if (accessorKey in this) {
                               console.warn(
@@ -292,7 +303,7 @@ export function customElement(tagName: string, options?: CustomElementOptions) {
                                 }
 
                                 if (typeof value !== "function") {
-                                  throw new TypeError(`'on${eventType}' must be a Function`);
+                                  throw new TypeError(`'on${lowercaseType}' must be a Function`);
                                 }
 
                                 attributeHandlerOverride = value;

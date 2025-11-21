@@ -7,7 +7,7 @@ describe("customElement", () => {
   it("calls callbacks on attribute change", async () => {
     const { CustomElement } = customElement("custom-elem-test1")
       .attributes({ foo: "string", bar: "number[]", userName: "string" })
-      .events([])
+      .events()
       .context(() => ({}))
       .methods(({ attribute }) => {
         return {
@@ -129,7 +129,7 @@ describe("customElement", () => {
   it("when children are changed callback is called", async () => {
     const { CustomElement } = customElement("custom-elem-test2")
       .attributes({})
-      .events([])
+      .events()
       .context(() => ({ options: [] as string[] }))
       .methods(() => {
         return {};
@@ -203,7 +203,7 @@ describe("customElement", () => {
   it("when children are changed they are copied into the portal", async () => {
     const { CustomElement } = customElement("custom-elem-test3", { childrenPortal: true })
       .attributes({})
-      .events([])
+      .events()
       .context(() => ({ options: [] as string[] }))
       .methods(() => {
         return {};
@@ -274,7 +274,7 @@ describe("customElement", () => {
 
     const { CustomElement } = customElement("custom-elem-test4")
       .attributes({ state: customParser })
-      .events([])
+      .events()
       .context(() => ({}))
       .methods(({ attribute }) => {
         return {
@@ -390,18 +390,26 @@ describe("customElement", () => {
     class MyCustomEvent extends Event {
       declare readonly type: "didthecustomthing";
 
-      constructor() {
+      constructor(type: string) {
         super("didthecustomthing", { cancelable: true });
+      }
+    }
+
+    class MyCustomEventWithArgs extends Event {
+      declare readonly type: "fooBar";
+
+      constructor(type: string, public value1: string, public value2: number) {
+        super("fooBar", { cancelable: true });
       }
     }
 
     const { CustomElement } = customElement("custom-elem-test6")
       .attributes({ state: "string" })
-      .events(["didthething", "didthecustomthing"])
+      .events({ "didthething": Event, "didthecustomthing": MyCustomEvent, fooBar: MyCustomEventWithArgs })
       .context()
       .methods(api => ({
         doThing() {
-          api.emitEvent("didthething")
+          api.emitEvent("didthething", { cancelable: true })
             .onCommit(() => {
               api.attribute.state.set("event emitted!");
             })
@@ -409,13 +417,31 @@ describe("customElement", () => {
               api.attribute.state.set("event cancelled!");
             });
         },
-        doCustomEvent() {
-          api.emitEvent(new MyCustomEvent())
+        doCustomEvent1() {
+          api.emitEvent(new MyCustomEvent("didthecustomthing"))
             .onCommit(() => {
-              api.attribute.state.set("custom event emitted!");
+              api.attribute.state.set("custom event emitted! 1");
             })
             .onCancel(() => {
-              api.attribute.state.set("custom event cancelled!");
+              api.attribute.state.set("custom event cancelled! 1");
+            });
+        },
+        doCustomEvent2() {
+          api.emitEvent("didthecustomthing")
+            .onCommit(() => {
+              api.attribute.state.set("custom event emitted! 2");
+            })
+            .onCancel(() => {
+              api.attribute.state.set("custom event cancelled! 2");
+            });
+        },
+        doFooBar() {
+          api.emitEvent("fooBar", "a", 1)
+            .onCommit(() => {
+              api.attribute.state.set("foobar emitted");
+            })
+            .onCancel(() => {
+              api.attribute.state.set("foobar cancelled!");
             });
         },
       }))
@@ -425,7 +451,7 @@ describe("customElement", () => {
     const elem = document.createElement("custom-elem-test6") as any as InstanceType<typeof CustomElement>;
     document.body.appendChild(elem);
 
-    expect.assertions(11);
+    expect.assertions(20);
 
     expect(elem.state).toBeNull();
 
@@ -453,17 +479,39 @@ describe("customElement", () => {
       onCustomEvent();
     });
 
-    elem.doCustomEvent();
+    elem.doCustomEvent1();
     expect(onCustomEvent).toHaveBeenCalledTimes(1);
-    expect(elem.state).toBe("custom event emitted!");
+    expect(elem.state).toBe("custom event emitted! 1");
 
-    elem.addEventListener("didthecustomthing", (e) => {
+    const cancelEv = (e: Event) => {
       e.preventDefault();
-    });
+    };
+    elem.addEventListener("didthecustomthing", cancelEv);
 
-    elem.doCustomEvent();
+    elem.doCustomEvent1();
     expect(onCustomEvent).toHaveBeenCalledTimes(2);
-    expect(elem.state).toBe("custom event cancelled!");
+    expect(elem.state).toBe("custom event cancelled! 1");
+    elem.removeEventListener("didthecustomthing", cancelEv);
+
+    elem.doCustomEvent2();
+    expect(onCustomEvent).toHaveBeenCalledTimes(3);
+    expect(elem.state).toBe("custom event emitted! 2");
+
+    elem.addEventListener("didthecustomthing", cancelEv);
+
+    elem.doCustomEvent2();
+    expect(onCustomEvent).toHaveBeenCalledTimes(4);
+    expect(elem.state).toBe("custom event cancelled! 2");
+    elem.removeEventListener("didthecustomthing", cancelEv);
+
+    const onFooBar = vi.fn();
+    elem.addEventListener("fooBar", e => {
+      expect(e).toBeInstanceOf(MyCustomEventWithArgs);
+      onFooBar();
+    });
+    elem.doFooBar();
+    expect(onFooBar).toHaveBeenCalledTimes(1);
+    expect(elem.state).toBe("foobar emitted");
   });
 
   it("custom event handlers in html", () => {
@@ -472,7 +520,7 @@ describe("customElement", () => {
 
     const { CustomElement } = customElement("custom-elem-test7")
       .attributes()
-      .events(["customevent"])
+      .events({ "customevent": CustomEvent })
       .context()
       .methods(api => {
         return {
@@ -529,5 +577,60 @@ describe("customElement", () => {
 
     expect(onLoopbackEvent).toHaveBeenCalledTimes(3);
     expect(onLoopbackEvent).toHaveBeenCalledWith("value: 420");
+  });
+
+  it("event handlers on properties", () => {
+    class Ev extends Event {
+      foobar = "123";
+      constructor(type: string, public value: string) {
+        super(type);
+      }
+    }
+
+    const { CustomElement } = customElement("custom-elem-test8")
+      .attributes({})
+      .events({
+        eVeNt1: Event,
+        EvEnt2: Ev,
+      })
+      .context(() => ({}))
+      .methods((api) => ({
+        e1() {
+          api.emitEvent("eVeNt1");
+        },
+        e2(value: string) {
+          api.emitEvent("EvEnt2", value);
+        },
+      }))
+      .connected(() => {})
+      .register();
+
+    const elem = document.createElement("custom-elem-test8") as any as InstanceType<typeof CustomElement>;
+
+    const onevent1 = vi.fn();
+    elem.onevent1 = onevent1;
+    elem.e1();
+    expect(onevent1).toHaveBeenCalledTimes(1);
+    expect(onevent1.mock.lastCall![0]!).toBeInstanceOf(Event);
+    expect(onevent1.mock.lastCall![0]!.type).toBe("eVeNt1");
+
+    const onevent2 = vi.fn();
+    elem.onevent2 = onevent2;
+    elem.e2("abc1");
+    expect(onevent2).toHaveBeenCalledTimes(1);
+    expect(onevent2.mock.lastCall![0]!).toBeInstanceOf(Ev);
+    expect(onevent2.mock.lastCall![0]!.type).toBe("EvEnt2");
+    expect(onevent2.mock.lastCall![0]!.foobar).toBe("123");
+    expect(onevent2.mock.lastCall![0]!.value).toBe("abc1");
+
+    // unassingning the handler stops listening
+    vi.clearAllMocks();
+
+    elem.onevent1 = null;
+    elem.onevent2 = null;
+    elem.e1();
+    elem.e2("abc1");
+    expect(onevent1).toHaveBeenCalledTimes(0);
+    expect(onevent2).toHaveBeenCalledTimes(0);
   });
 });

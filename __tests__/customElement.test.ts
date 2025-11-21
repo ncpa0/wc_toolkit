@@ -592,6 +592,7 @@ describe("customElement", () => {
       .events({
         eVeNt1: Event,
         EvEnt2: Ev,
+        change: Ev,
       })
       .context(() => ({}))
       .methods((api) => ({

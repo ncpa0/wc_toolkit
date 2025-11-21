@@ -46,6 +46,13 @@ export type MethodsDefinitions = {
   [k: string]: (...args: any[]) => any;
 };
 
+type ExtendBaseHtmlElem<Custom> = Custom & Omit<HTMLElement, keyof Custom>;
+
+type Rewrap<T> = T extends infer O extends object ? {
+    [K in keyof O]: O[K];
+  }
+  : never;
+
 export type CustomElement<
   Attr extends AttributesDefinitions,
   Evnts extends EventsDefinitions,
@@ -53,15 +60,17 @@ export type CustomElement<
 > = {
   readonly observedAttributes: readonly AttributeDefToNames<Attr>[];
 
-  new():
-    & Omit<HTMLElement, "addEventListener" | "removeEventListener">
-    & PublicMethods<Methods>
-    & AttributeAccessors<Attr>
-    & EventAttributeAcessors<Evnts>
-    & EvenListenerFunctions<Evnts>
-    & {
-      readonly attributeNames: readonly AttributeDefToNames<Attr>[];
-    };
+  new(): Rewrap<
+    ExtendBaseHtmlElem<
+      & PublicMethods<Methods>
+      & AttributeAccessors<Attr>
+      & EventAttributeAcessors<Evnts>
+      & EvenListenerFunctions<Evnts>
+      & {
+        readonly attributeNames: readonly AttributeDefToNames<Attr>[];
+      }
+    >
+  >;
 };
 
 export type AttrOptions = {

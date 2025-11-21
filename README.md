@@ -27,7 +27,7 @@ customElement("my-video-element")
     poster: "string",
     autoplay: "boolean"
   })
-  .events(["progressbar-hover"]) // list of events this component is allowed to emit
+  .events({ "progressbar-hover": Event })
   .context(() => {
     const internalState = {
       isPlaying: false;
@@ -122,3 +122,49 @@ declare global {
   }
 }
 ```
+
+## Events
+
+Every event that a custom element can emit should be defined in the events method. Each event defeinition must specify the event constructor.
+
+### Example
+
+```ts
+customElement("my-video-element")
+  .attributes({})
+  .events({ "my-custom-event": Event })
+```
+
+or a custom event class:
+
+```ts
+class MyEvent extends Event {
+  constructor(type: string) { //event class must always accept a event type as it's first argument
+    super(type);
+  }
+}
+
+customElement("my-video-element")
+  .attributes({})
+  .events({ "my-custom-event": MyEvent })
+```
+
+events can be then emitted via the `emitEvent` api helper:
+
+```ts
+methods(api => {
+  return {
+    triggerCustomEvent() {
+      api.emitEvent("my-custom-event", { cancellable: true })
+        .onCommit(() => {
+          // do something after emitting the event if it was not canceled
+        }) 
+        .onCancel(() => {
+          // do something if the event was canceled via `event.preventDefault()`
+        })
+    }
+  }
+})
+```
+
+`api.emitEvent()` cen be either called with the event type name followed by the rest of that Event class arguments or with that Event instance object.

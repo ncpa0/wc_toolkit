@@ -132,21 +132,21 @@ Every event that a custom element can emit should be defined in the events metho
 ```ts
 customElement("my-video-element")
   .attributes({})
-  .events({ "my-custom-event": Event })
+  .events({ "my-custom-event": Event });
 ```
 
 or a custom event class:
 
 ```ts
 class MyEvent extends Event {
-  constructor(type: string) { //event class must always accept a event type as it's first argument
+  constructor(type: string) { // event class must always accept a event type as it's first argument
     super(type);
   }
 }
 
 customElement("my-video-element")
   .attributes({})
-  .events({ "my-custom-event": MyEvent })
+  .events({ "my-custom-event": MyEvent });
 ```
 
 events can be then emitted via the `emitEvent` api helper:
@@ -158,13 +158,13 @@ methods(api => {
       api.emitEvent("my-custom-event", { cancellable: true })
         .onCommit(() => {
           // do something after emitting the event if it was not canceled
-        }) 
+        })
         .onCancel(() => {
           // do something if the event was canceled via `event.preventDefault()`
-        })
-    }
-  }
-})
+        });
+    },
+  };
+});
 ```
 
 `api.emitEvent()` cen be either called with the event type name followed by the rest of that Event class arguments or with that Event instance object.

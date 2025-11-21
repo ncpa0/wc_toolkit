@@ -1,5 +1,5 @@
 import { AttributeController } from "./attribute";
-import { AttributesDefinitions, EventNames, EventsDefinitions } from "./custom_element";
+import { AttributesDefinitions, EventsDefinitions } from "./custom_element";
 import { AttributeApi, ConstructorArgs, Value } from "./type.utils";
 import { ListenerController } from "./utils";
 

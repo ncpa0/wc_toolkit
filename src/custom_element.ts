@@ -1,4 +1,5 @@
 import { AttributeController } from "./attribute";
+import { CleanupController } from "./cleanup_controller";
 import { FunctionAttributeParser } from "./function-parser";
 import { ConnectedCallbackApi } from "./main_fn_api";
 import { MethodsApi } from "./methods_api";
@@ -198,7 +199,7 @@ export function customElement(tagName: string, options?: CustomElementOptions) {
                         private readonly root: HTMLElement | ShadowRoot = getRoot(this);
 
                         private readonly attributeController = new AttributeController(this);
-                        private readonly cleanups: Array<() => void> = [];
+                        private readonly cleanups = new CleanupController();
                         private readonly _context = getContext(
                           this.attributeController.getAttributesApi(attributes, attributeOptions),
                         );
@@ -355,7 +356,7 @@ export function customElement(tagName: string, options?: CustomElementOptions) {
 
                           const cleanup = onConnectedCallback(this._mainFuncApi);
                           if (cleanup) {
-                            this.cleanups.push(cleanup);
+                            this.cleanups.once(cleanup);
                           }
 
                           this.mutationObserver = new MutationObserver((mutationRecords) => {
@@ -374,12 +375,13 @@ export function customElement(tagName: string, options?: CustomElementOptions) {
                             characterData: true,
                             subtree: observeSubtree,
                           });
-                          this.cleanups.push(() => {
+                          this.cleanups.once(() => {
                             this.mutationObserver!.disconnect();
                             this.mutationObserver = undefined;
                           });
                           setTimeout(() => {
                             this._mainFuncApi["triggerChildrenChange"](true);
+                            this._mainFuncApi["triggerReadyCallbacks"]();
                           });
                         }
 
@@ -392,9 +394,7 @@ export function customElement(tagName: string, options?: CustomElementOptions) {
                             }
                           }
 
-                          for (const cleanup of this.cleanups) {
-                            cleanup();
-                          }
+                          this.cleanups.runCleanups();
                         }
 
                         attributeChangedCallback(name: string, oldValue: string, newValue: string) {

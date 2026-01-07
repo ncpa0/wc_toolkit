@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { customElement } from "../src/index.ts";
+import { customElement } from "../src/index";
 
 const sleep = (ms: number = 0) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -633,5 +633,40 @@ describe("customElement", () => {
     elem.e2("abc1");
     expect(onevent1).toHaveBeenCalledTimes(0);
     expect(onevent2).toHaveBeenCalledTimes(0);
+  });
+
+  it("invokes the ready callbacks after initialization is complete", async () => {
+    const calls: string[] = [];
+
+    customElement("custom-elem-test9")
+      .attributes()
+      .events()
+      .context()
+      .methods()
+      .connected(api => {
+        api.onReady(() => {
+          calls.push("ready 1");
+        });
+
+        api.onReady(() => {
+          calls.push("ready 2");
+        });
+
+        api.onChildrenChange(() => {
+          calls.push("children change");
+        });
+      })
+      .register();
+
+    document.body.innerHTML = "<custom-elem-test9><div></div></custom-elem-test9>";
+
+    await sleep(1);
+
+    expect(calls).toHaveLength(3);
+    expect(calls).toEqual([
+      "children change",
+      "ready 1",
+      "ready 2",
+    ]);
   });
 });

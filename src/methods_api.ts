@@ -1,4 +1,5 @@
 import { AttributeController } from "./attribute";
+import { CleanupController } from "./cleanup_controller";
 import { AttributesDefinitions, EventsDefinitions } from "./custom_element";
 import { AttributeApi, ConstructorArgs, Value } from "./type.utils";
 import { ListenerController } from "./utils";
@@ -48,7 +49,7 @@ export class MethodsApi<
 
   constructor(
     protected readonly _thisElement: HTMLElement,
-    protected readonly cleanups: Array<() => void>,
+    protected readonly cleanups: CleanupController,
     public readonly context: Ctx,
     protected readonly attributeController: AttributeController,
     protected readonly root: HTMLElement | ShadowRoot,
@@ -114,7 +115,7 @@ export class MethodsApi<
     if (options?.initEnabled !== false) {
       controller.enable();
     }
-    this.cleanups.push(() => {
+    this.cleanups.once(() => {
       controller.destroy();
     });
     return controller;
@@ -133,7 +134,7 @@ export class MethodsApi<
     if (options?.initEnabled !== false) {
       controller.enable();
     }
-    this.cleanups.push(() => {
+    this.cleanups.once(() => {
       controller.destroy();
     });
     return controller;
@@ -152,7 +153,7 @@ export class MethodsApi<
     if (options?.initEnabled !== false) {
       controller.enable();
     }
-    this.cleanups.push(() => {
+    this.cleanups.once(() => {
       controller.destroy();
     });
     return controller;

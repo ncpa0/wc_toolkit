@@ -3,9 +3,8 @@
     "target": "ESNext",
     "module": "ES6",
     "moduleResolution": "node",
-    "declaration": true,
-    "outDir": "./dist",
-    "rootDir": "./src",
+    "declaration": false,
+    "noEmit": true,
     "downlevelIteration": true,
     "strict": true,
     "noUnusedLocals": true,
@@ -16,6 +15,5 @@
     "isolatedModules": true,
     "noImplicitAny": true,
     "useDefineForClassFields": false
-  },
-  "include": ["src/**/*"]
+  }
 }

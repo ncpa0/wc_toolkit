@@ -193,3 +193,11 @@ export const ALL_BROWSER_EVENTS = [
   "waiting",
   "wheel",
 ];
+
+export function nofail(fn: () => any) {
+  try {
+    fn();
+  } catch (err) {
+    console.error(err);
+  }
+}

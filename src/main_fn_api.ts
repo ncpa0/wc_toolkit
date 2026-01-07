@@ -1,7 +1,8 @@
 import { Attribute, AttributeController } from "./attribute";
+import { CleanupController } from "./cleanup_controller";
 import { AttributesDefinitions, EventsDefinitions, MethodsDefinitions } from "./custom_element";
 import { MethodsApi } from "./methods_api";
-import { nodeHasClassName } from "./utils";
+import { nodeHasClassName, nofail } from "./utils";
 
 declare global {
   interface WcToolkitDependencies {
@@ -38,10 +39,11 @@ export class ConnectedCallbackApi<
   }
 
   private readonly childrenChangeCallbacks: Array<(children: Array<Element | Text>) => void> = [];
+  private readonly readyCallbacks: Array<() => any> = [];
 
   constructor(
     thisElement: HTMLElement,
-    cleanups: Array<() => void>,
+    cleanups: CleanupController,
     attributeController: AttributeController,
     public readonly context: Ctx,
     public readonly method: Methods,
@@ -51,6 +53,10 @@ export class ConnectedCallbackApi<
     attributes: Attr,
   ) {
     super(thisElement, cleanups, context, attributeController, root, eventsRecord, attributes);
+    cleanups.add(() => {
+      this.childrenChangeCallbacks.splice(0, this.childrenChangeCallbacks.length);
+      this.readyCallbacks.splice(0, this.readyCallbacks.length);
+    });
   }
 
   private getHandler(v: unknown): DependencyHandler<any> {
@@ -87,26 +93,50 @@ export class ConnectedCallbackApi<
     });
   }
 
+  protected triggerReadyCallbacks() {
+    for (let cb = this.readyCallbacks.shift(); cb != null; cb = this.readyCallbacks.shift()) {
+      nofail(cb);
+    }
+  }
+
   protected triggerChildrenChange(skipIfZero = false) {
     const children = this.getChildren();
     if (skipIfZero && children.length === 0) {
       return;
     }
     for (const cb of this.childrenChangeCallbacks) {
-      cb(children);
+      nofail(() => cb(children));
     }
   }
 
+  /**
+   * Registers a callback that will be invoked whenever a direct children of
+   * this Web Component is changed, added or removed. This only includes childrens
+   * passed to it from outside, and doesn't include children added by this web component.
+   *
+   * These callbacks are only guaranteed to run while the component is mounted in the page.
+   */
   onChildrenChange(cb: (children: Array<Element | Text>) => void): void {
     this.childrenChangeCallbacks.push(cb);
-    this.cleanups.push(() => {
-      const index = this.childrenChangeCallbacks.indexOf(cb);
-      if (index !== -1) {
-        this.childrenChangeCallbacks.splice(index, 1);
-      }
-    });
   }
 
+  /**
+   * Registers a callback that will be invoked once the Web Component is initialized and
+   * all it's initial children are accounted for.
+   *
+   * These callbacks are only guaranteed to run while the component is mounted in the page.
+   */
+  onReady(cb: () => any) {
+    this.readyCallbacks.push(cb);
+  }
+
+  /**
+   * Registers a callback that will be invoked every time any of it's dependencies changes.
+   * Only the attributes can be dependencies by default, but through the `registerDependencyHandler()`
+   * other dependencies can be added.
+   *
+   * These callbacks are only guaranteed to run while the component is mounted in the page.
+   */
   onChange(deps: Dependency[], cb: () => void | (() => void)): void {
     let willRunOnNextMicroevent = false;
 
@@ -125,7 +155,7 @@ export class ConnectedCallbackApi<
         });
       });
 
-      this.cleanups.push(unbind);
+      this.cleanups.once(unbind);
     }
   }
 
@@ -133,8 +163,15 @@ export class ConnectedCallbackApi<
    * Adds a cleanup function that will be called when the element is
    * disconnected from the document.
    */
-  cleanup(cb: () => void): void {
-    this.cleanups.push(cb);
+  cleanup(cb: () => void, opts?: {
+    /** By default a cleanup will be only ever called once on the next element `disconnect` event. Set this to true to keep it forever and run it on every `disconnect`. Usually this is not needed as every `connect` event would add a new cleanup. */
+    keep?: true;
+  }): void {
+    if (opts?.keep) {
+      this.cleanups.add(cb);
+      return;
+    }
+    this.cleanups.once(cb);
   }
 }
 

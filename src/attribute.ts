@@ -65,7 +65,7 @@ export class Attribute<K extends string, T> {
         result = value;
         break;
       case "boolean":
-        result = true;
+        result = value === "false" ? false : true;
         break;
       case "number":
         result = Number(value);
@@ -117,6 +117,11 @@ export class Attribute<K extends string, T> {
     }
 
     return result;
+  }
+
+  /** Wether this attribute is currently set or not. */
+  has(): boolean {
+    return this.controller.has(this.attrKey);
   }
 
   get(): T | null {
@@ -218,6 +223,10 @@ export class AttributeController {
         },
       }),
     );
+  }
+
+  has(attributeName: string) {
+    return this.element.hasAttribute(attributeName);
   }
 
   get(attributeName: string) {

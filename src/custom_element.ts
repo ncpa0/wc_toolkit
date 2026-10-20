@@ -75,19 +75,31 @@ export type CustomElement<
   >;
 };
 
+/**
+ * Per-instance home for the event wiring: the event proxy slots are filled
+ * inside the constructor's event loop, where the proxies are created.
+ */
 type ElementInstanceState = {
-  attrProxies: Array<Attribute<string, any> | undefined>;
-  attributeApi: Record<string, Attribute<string, any>> | null;
   eventProxies: Array<Attribute<string, any> | undefined>;
   eventOverride: Array<((event: Event) => void) | null>;
   eventHandler: Array<((event: Event) => void) | null>;
-  methodFns: Array<((...args: any[]) => any) | undefined>;
-  boundMethods: Record<string, (...args: any[]) => any> | null;
 };
 
 const INSTANCE_STATE = Symbol("wc_toolkit:instance_state");
 
-type InstanceStateCarrier = { [INSTANCE_STATE]: ElementInstanceState };
+/**
+ * Structural view of the per-instance `_api` field as seen from the
+ * prototype accessor closures; they are defined outside the class body,
+ * where the generic class type isn't available.
+ */
+type ElementApiCarrier = {
+  _api?: {
+    method: Record<string, (...args: any[]) => any>;
+    attribute: Record<string, Attribute<string, any>>;
+  };
+};
+
+type InstanceStateCarrier = { [INSTANCE_STATE]: ElementInstanceState } & ElementApiCarrier;
 
 /**
  * Plain element used as the collision-check surface. The `in` operator must
@@ -316,16 +328,12 @@ export function customElement(tagName: string, options?: CustomElementOptions) {
 
                       const elementConstructor = class WcToolkitCustomElement extends HTMLElement {
                         // must be the first initialized field: the shared
-                        // prototype accessors read this state, and they can
-                        // be reached while the remaining fields initialize
+                        // prototype event accessors read this state, and they
+                        // can be reached while the remaining fields initialize
                         [INSTANCE_STATE]: ElementInstanceState = {
-                          attrProxies: [],
-                          attributeApi: null,
                           eventProxies: [],
                           eventOverride: [],
                           eventHandler: [],
-                          methodFns: [],
-                          boundMethods: null,
                         };
 
                         static readonly NAME = tagName;
@@ -375,9 +383,8 @@ export function customElement(tagName: string, options?: CustomElementOptions) {
                         constructor() {
                           super();
 
-                          // stays writable (method fns are cached into it
-                          // after construction) but must not be enumerable,
-                          // or `{...elem}` copies the whole internal state
+                          // stays writable but must not be enumerable, or
+                          // `{...elem}` copies the whole internal state
                           // out of the instance
                           Object.defineProperty(this, INSTANCE_STATE, {
                             value: this[INSTANCE_STATE],
@@ -388,7 +395,6 @@ export function customElement(tagName: string, options?: CustomElementOptions) {
 
                           const state = this[INSTANCE_STATE];
                           const boundMethods = this._api.method as Record<string, (...args: any[]) => any>;
-                          state.boundMethods = boundMethods;
 
                           if (!methodAccessorsDefined) {
                             // method accessors are defined on the prototype
@@ -424,15 +430,12 @@ export function customElement(tagName: string, options?: CustomElementOptions) {
                               Object.defineProperty(elementConstructor.prototype, key, {
                                 enumerable: false,
                                 configurable: false,
-                                get: function(this: InstanceStateCarrier) {
-                                  const methodState = this[INSTANCE_STATE];
-                                  const cached = methodState.methodFns[stateIndex];
-                                  if (cached !== undefined) {
-                                    return cached;
-                                  }
-                                  const fn = methodState.boundMethods?.[key];
-                                  methodState.methodFns[stateIndex] = fn;
-                                  return fn;
+                                get: function(this: ElementApiCarrier) {
+                                  // `_api` is still undefined while the
+                                  // construction window (the user callbacks
+                                  // computing it) is running; the accessor
+                                  // must return undefined then, not crash
+                                  return this._api?.method[key];
                                 },
                               });
                             }
@@ -451,14 +454,6 @@ export function customElement(tagName: string, options?: CustomElementOptions) {
                               }
                             }
                           }
-
-                          // attribute proxy slots in `attrProxies` are
-                          // lazy-filled by the prototype accessors on first
-                          // use; the api object holds the same proxies
-                          state.attributeApi = this.attributeController.getAttributesApi(
-                            attributes,
-                            attributeOptions,
-                          ) as Record<string, Attribute<string, any>>;
 
                           for (const event of eventsTable) {
                             // only custom events need additional handling
@@ -622,22 +617,22 @@ export function customElement(tagName: string, options?: CustomElementOptions) {
                       };
 
                       // attribute accessors are defined once per definition on
-                      // the prototype; the shared closures read the per-instance
-                      // state stored under INSTANCE_STATE
+                      // the prototype; the shared closures read the attribute
+                      // proxies through the per-instance api object
                       for (const attr of attributeTable) {
                         if (collidingAttributeKeys.has(attr.key)) continue;
-                        const index = attr.index;
                         Object.defineProperty(elementConstructor.prototype, attr.key, {
                           enumerable: false,
                           configurable: false,
-                          get: function(this: InstanceStateCarrier) {
-                            const state = this[INSTANCE_STATE];
-                            const proxy = state.attrProxies[index] ??= state.attributeApi?.[attr.key];
+                          get: function(this: ElementApiCarrier) {
+                            // `_api` is undefined during the construction
+                            // window (user callbacks run before it exists):
+                            // reads return undefined, writes no-op
+                            const proxy = this._api?.attribute[attr.key];
                             return proxy?.get();
                           },
-                          set: function(this: InstanceStateCarrier, value: any) {
-                            const state = this[INSTANCE_STATE];
-                            const proxy = state.attrProxies[index] ??= state.attributeApi?.[attr.key];
+                          set: function(this: ElementApiCarrier, value: any) {
+                            const proxy = this._api?.attribute[attr.key];
                             proxy?.set(value);
                           },
                         });

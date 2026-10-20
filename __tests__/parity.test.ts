@@ -1051,6 +1051,40 @@ describe("parity lock", () => {
     });
   });
 
+  describe("construction window lock", () => {
+    it("instance accessors reached during getMethods don't throw: reads are undefined and writes are no-ops", () => {
+      const reads: unknown[] = [];
+
+      const { CustomElement } = customElement("cw-elem-1")
+        .attributes({ foo: "string" })
+        .events()
+        .context()
+        .methods(api => {
+          const elem = api.thisElement as any;
+          elem.foo = "written-during-getMethods";
+          reads.push(elem.foo, elem.doThing);
+          return { doThing: () => 1 };
+        })
+        .connected(() => {})
+        .register();
+
+      // the first instance defines the prototype accessors; the second
+      // one reaches them while its own api object is still absent
+      const elem1 = document.createElement("cw-elem-1") as any as InstanceType<typeof CustomElement>;
+      const elem2 = document.createElement("cw-elem-1") as any as InstanceType<typeof CustomElement>;
+
+      expect(reads).toEqual([undefined, undefined, undefined, undefined]);
+      expect(elem1.getAttribute("foo")).toBeNull();
+      expect(elem2.getAttribute("foo")).toBeNull();
+
+      // after the window the accessors work normally
+      expect(elem1.doThing()).toBe(1);
+      expect(elem2.doThing()).toBe(1);
+      elem2.foo = "ok";
+      expect(elem2.getAttribute("foo")).toBe("ok");
+    });
+  });
+
   describe("lazy root structures (plan G6 lock)", () => {
     it("noContent component: attach before connect leaves the content in a detached root div, never in the element", () => {
       const { CustomElement } = customElement("g6-elem-1", { noContent: true })

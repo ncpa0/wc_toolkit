@@ -1157,5 +1157,37 @@ describe("parity lock", () => {
       expect(root.className).toBe("_wc_toolkit_content_container");
       expect(root.parentNode).toBe(elem);
     });
+
+    it("attribute named `_root` warns and does not corrupt the internal root state", () => {
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+      try {
+        const { CustomElement } = customElement("g6-elem-5")
+          .attributes({ _root: "string" })
+          .events()
+          .context()
+          .methods()
+          .connected(() => {})
+          .register();
+
+        const elem = document.createElement("g6-elem-5") as any as InstanceType<
+          typeof CustomElement
+        >;
+        document.body.appendChild(elem);
+
+        expect(warnSpy).toHaveBeenCalledTimes(1);
+        expect(warnSpy).toHaveBeenCalledWith(
+          "Property '_root' already exists on the HTMLElement, cannot assign attribute accessor. [g6-elem-5]",
+        );
+
+        // the accessor must not exist; the internal field keeps working
+        expect(Object.getOwnPropertyDescriptor(elem, "_root")!.get).toBeUndefined();
+        expect(Object.getOwnPropertyDescriptor(elem, "_root")!.value).toBeInstanceOf(HTMLDivElement);
+
+        elem.remove();
+      } finally {
+        warnSpy.mockRestore();
+      }
+    });
   });
 });

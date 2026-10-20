@@ -108,6 +108,7 @@ const ELEMENT_OWN_NAMES = new Set([
   "observedAttributes",
   "NAME",
   "root",
+  "_root",
   "attributeController",
   "cleanups",
   "_api",
@@ -601,8 +602,9 @@ export function customElement(tagName: string, options?: CustomElementOptions) {
                           this.isMounted = false;
 
                           if (!noContent) {
-                            if (!(this.root instanceof ShadowRoot)) {
-                              this.root.remove();
+                            // don't force-allocate the lazy root just to remove it
+                            if (!(this._root instanceof ShadowRoot)) {
+                              this._root?.remove();
                             }
                           }
 

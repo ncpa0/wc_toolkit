@@ -21,8 +21,14 @@ export function toCamelCase(str: string): string {
   return str.replace(/(-[a-z])/g, (_, part) => part[1].toUpperCase()).replaceAll("-", "");
 }
 
+const attrNameCache = new Map<string, string>();
 export function toAttributeName(str: string): string {
-  return str.replace(/([a-z][A-Z])/g, (_, g) => `${g[0]}${g[1].toLowerCase()}`).toLowerCase();
+  let cached = attrNameCache.get(str);
+  if (cached === undefined) {
+    cached = str.replace(/([a-z][A-Z])/g, (_, g) => `${g[0]}${g[1].toLowerCase()}`).toLowerCase();
+    attrNameCache.set(str, cached);
+  }
+  return cached;
 }
 
 export function nodeHasClassName(node: Node, className: string): boolean {

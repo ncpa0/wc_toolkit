@@ -77,6 +77,7 @@ export type CustomElement<
 
 type ElementInstanceState = {
   attrProxies: Array<Attribute<string, any> | undefined>;
+  attributeApi: Record<string, Attribute<string, any>> | null;
   eventProxies: Array<Attribute<string, any> | undefined>;
   eventOverride: Array<((event: Event) => void) | null>;
   eventHandler: Array<((event: Event) => void) | null>;
@@ -309,6 +310,7 @@ export function customElement(tagName: string, options?: CustomElementOptions) {
                       };
 
                       let methodStateCount = 0;
+                      let methodAccessorsDefined = false;
                       const methodStateIndexes = new Map<string, number>();
                       const methodOwnPropKeys = new Set<string>();
 
@@ -318,6 +320,7 @@ export function customElement(tagName: string, options?: CustomElementOptions) {
                         // be reached while the remaining fields initialize
                         [INSTANCE_STATE]: ElementInstanceState = {
                           attrProxies: [],
+                          attributeApi: null,
                           eventProxies: [],
                           eventOverride: [],
                           eventHandler: [],
@@ -387,50 +390,53 @@ export function customElement(tagName: string, options?: CustomElementOptions) {
                           const boundMethods = this._api.method as Record<string, (...args: any[]) => any>;
                           state.boundMethods = boundMethods;
 
-                          // method accessors are defined on the prototype once
-                          // per definition, the first time the method keys are
-                          // known
-                          for (const key in boundMethods) {
-                            if (methodStateIndexes.has(key) || methodOwnPropKeys.has(key)) continue;
+                          if (!methodAccessorsDefined) {
+                            // method accessors are defined on the prototype
+                            // the first time the method keys are known; later
+                            // instances skip straight to the own-prop loop
+                            for (const key in boundMethods) {
+                              if (methodStateIndexes.has(key) || methodOwnPropKeys.has(key)) continue;
 
-                            if (
-                              collides(key) || ELEMENT_OWN_NAMES.has(key)
-                              || attributeKeySet.has(key) || eventAccessorKeySet.has(key)
-                            ) {
-                              // the method keeps the name (methods were defined
-                              // first); the displaced attribute / event accessor
-                              // gets an own method property on every instance
-                              // instead and warns once
-                              methodOwnPropKeys.add(key);
-                              if (attributeKeySet.has(key) && !collidingAttributeKeys.has(key)) {
-                                console.warn(
-                                  `Property '${key}' already exists on the HTMLElement, cannot assign attribute accessor. [${tagName}]`,
-                                );
-                              }
-                              if (eventAccessorKeySet.has(key) && !collidingEventAccessorKeys.has(key)) {
-                                console.warn(
-                                  `Property '${key}' already exists on the HTMLElement, cannot assign event callback accessor. [${tagName}]`,
-                                );
-                              }
-                              continue;
-                            }
-
-                            const stateIndex = methodStateCount++;
-                            methodStateIndexes.set(key, stateIndex);
-                            Object.defineProperty(elementConstructor.prototype, key, {
-                              enumerable: false,
-                              configurable: false,
-                              get: function(this: InstanceStateCarrier) {
-                                const methodState = this[INSTANCE_STATE];
-                                const cached = methodState.methodFns[stateIndex];
-                                if (cached !== undefined) {
-                                  return cached;
+                              if (
+                                collides(key) || ELEMENT_OWN_NAMES.has(key)
+                                || attributeKeySet.has(key) || eventAccessorKeySet.has(key)
+                              ) {
+                                // the method keeps the name (methods were defined
+                                // first); the displaced attribute / event accessor
+                                // gets an own method property on every instance
+                                // instead and warns once
+                                methodOwnPropKeys.add(key);
+                                if (attributeKeySet.has(key) && !collidingAttributeKeys.has(key)) {
+                                  console.warn(
+                                    `Property '${key}' already exists on the HTMLElement, cannot assign attribute accessor. [${tagName}]`,
+                                  );
                                 }
-                                const fn = methodState.boundMethods?.[key];
-                                methodState.methodFns[stateIndex] = fn;
-                                return fn;
-                              },
-                            });
+                                if (eventAccessorKeySet.has(key) && !collidingEventAccessorKeys.has(key)) {
+                                  console.warn(
+                                    `Property '${key}' already exists on the HTMLElement, cannot assign event callback accessor. [${tagName}]`,
+                                  );
+                                }
+                                continue;
+                              }
+
+                              const stateIndex = methodStateCount++;
+                              methodStateIndexes.set(key, stateIndex);
+                              Object.defineProperty(elementConstructor.prototype, key, {
+                                enumerable: false,
+                                configurable: false,
+                                get: function(this: InstanceStateCarrier) {
+                                  const methodState = this[INSTANCE_STATE];
+                                  const cached = methodState.methodFns[stateIndex];
+                                  if (cached !== undefined) {
+                                    return cached;
+                                  }
+                                  const fn = methodState.boundMethods?.[key];
+                                  methodState.methodFns[stateIndex] = fn;
+                                  return fn;
+                                },
+                              });
+                            }
+                            methodAccessorsDefined = true;
                           }
 
                           if (methodOwnPropKeys.size > 0) {
@@ -446,14 +452,13 @@ export function customElement(tagName: string, options?: CustomElementOptions) {
                             }
                           }
 
-                          const attrApi = this.attributeController.getAttributesApi(
+                          // attribute proxy slots in `attrProxies` are
+                          // lazy-filled by the prototype accessors on first
+                          // use; the api object holds the same proxies
+                          state.attributeApi = this.attributeController.getAttributesApi(
                             attributes,
                             attributeOptions,
                           ) as Record<string, Attribute<string, any>>;
-                          const attrProxies = state.attrProxies;
-                          for (const attr of attributeTable) {
-                            attrProxies[attr.index] = attrApi[attr.key];
-                          }
 
                           for (const event of eventsTable) {
                             // only custom events need additional handling
@@ -626,10 +631,14 @@ export function customElement(tagName: string, options?: CustomElementOptions) {
                           enumerable: false,
                           configurable: false,
                           get: function(this: InstanceStateCarrier) {
-                            return this[INSTANCE_STATE].attrProxies[index]?.get();
+                            const state = this[INSTANCE_STATE];
+                            const proxy = state.attrProxies[index] ??= state.attributeApi?.[attr.key];
+                            return proxy?.get();
                           },
                           set: function(this: InstanceStateCarrier, value: any) {
-                            this[INSTANCE_STATE].attrProxies[index]?.set(value);
+                            const state = this[INSTANCE_STATE];
+                            const proxy = state.attrProxies[index] ??= state.attributeApi?.[attr.key];
+                            proxy?.set(value);
                           },
                         });
                       }

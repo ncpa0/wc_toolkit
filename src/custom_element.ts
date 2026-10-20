@@ -315,6 +315,8 @@ export function customElement(tagName: string, options?: CustomElementOptions) {
                         }
                       }
 
+                      const customEvents = eventsTable.filter(e => !e.isBrowserEvent);
+
                       const MUTATION_INIT: MutationObserverInit = {
                         childList: true,
                         characterData: true,
@@ -450,11 +452,9 @@ export function customElement(tagName: string, options?: CustomElementOptions) {
                             }
                           }
 
-                          for (const event of eventsTable) {
-                            // only custom events need additional handling
-                            if (event.isBrowserEvent) {
-                              continue;
-                            }
+                          let event: typeof customEvents[0];
+                          for (let i = 0; i < customEvents.length; i++) {
+                            event = customEvents[i]!;
 
                             const stateIndex = event.stateIndex;
                             const attrProxy = this.attributeController.getOrCreateProxy(
@@ -632,8 +632,8 @@ export function customElement(tagName: string, options?: CustomElementOptions) {
                       }
 
                       const definedEventAccessorKeys = new Set<string>();
-                      for (const event of eventsTable) {
-                        if (event.isBrowserEvent || collidingEventAccessorKeys.has(event.accessorKey)) continue;
+                      for (const event of customEvents) {
+                        if (collidingEventAccessorKeys.has(event.accessorKey)) continue;
                         // event names differing only in case share an
                         // accessor key; redefining the non-configurable
                         // property would throw, so the second entry only

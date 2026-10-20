@@ -250,6 +250,46 @@ describe("parity lock", () => {
       expect(third).toEqual({ v: "b" });
       expect(third).not.toBe(second);
     });
+
+    it("falsy values are memoized too (no re-parse on every get)", () => {
+      const parseSpy = vi.fn((attr: string | null) =>
+        attr == null ? null : attr === "false" ? false : attr === "zero" ? 0 : attr === "empty" ? "" : attr
+      );
+
+      const { CustomElement } = customElement("parity-elem-7b")
+        .attributes({ val: { fromString: parseSpy, intoString: (v: any) => v } as any })
+        .events()
+        .context()
+        .methods(api => ({
+          getVal(): any {
+            return api.attribute.val.get();
+          },
+        }))
+        .connected(() => {})
+        .register();
+
+      const elem = document.createElement("parity-elem-7b") as any as InstanceType<typeof CustomElement>;
+
+      // unset attribute -> null is memoized
+      const nullValue = elem.getVal();
+      expect(nullValue).toBeNull();
+      expect(elem.getVal()).toBe(nullValue);
+
+      elem.setAttribute("val", "false");
+      expect(elem.getVal()).toBe(false);
+      expect(elem.getVal()).toBe(false);
+      expect(parseSpy).toHaveBeenCalledTimes(2); // once for "false", not again
+
+      elem.setAttribute("val", "zero");
+      expect(elem.getVal()).toBe(0);
+      expect(elem.getVal()).toBe(0);
+      expect(parseSpy).toHaveBeenCalledTimes(3);
+
+      elem.setAttribute("val", "empty");
+      expect(elem.getVal()).toBe("");
+      expect(elem.getVal()).toBe("");
+      expect(parseSpy).toHaveBeenCalledTimes(4);
+    });
   });
 
   describe("reconnect cycles", () => {

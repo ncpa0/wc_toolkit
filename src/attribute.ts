@@ -28,6 +28,7 @@ export class Attribute<K extends string, T> {
     };
   }
 
+  private memoHasValue = false;
   private valueMemo: T | null = null;
   public readonly attrKey: string;
 
@@ -44,6 +45,7 @@ export class Attribute<K extends string, T> {
   }
 
   private clearMemo() {
+    this.memoHasValue = false;
     this.valueMemo = null;
   }
 
@@ -125,17 +127,17 @@ export class Attribute<K extends string, T> {
   }
 
   get(): T | null {
-    if (this.valueMemo) {
-      return this.valueMemo;
-    }
+    if (this.memoHasValue) return this.valueMemo;
     const result = this.stringToAttrType(this.controller.get(this.attrKey)!);
     this.valueMemo = result;
+    this.memoHasValue = true;
     return result;
   }
 
   set(value: T | null): void {
     const stringified = this.attrTypeToString(value);
     this.valueMemo = value;
+    this.memoHasValue = true;
     if (stringified != null) {
       this.controller.set(this.attrKey, stringified);
     } else {
@@ -145,6 +147,7 @@ export class Attribute<K extends string, T> {
 
   unset(): void {
     this.valueMemo = null;
+    this.memoHasValue = false;
     this.controller.unset(this.attrKey);
   }
 

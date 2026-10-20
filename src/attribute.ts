@@ -168,6 +168,7 @@ export class Attribute<K extends string, T> {
 export class AttributeController {
   private readonly emitter = new EventTarget();
   private readonly attrProxies = new Map<string, Attribute<string, any>>();
+  private attributesApiCache: Record<string, Attribute<string, any>> | null = null;
 
   constructor(
     public readonly element: HTMLElement,
@@ -177,12 +178,14 @@ export class AttributeController {
     attributes: Attr,
     attributeOptions?: AttributeOptionsMap<keyof Attr>,
   ) {
-    const api = Object.fromEntries(
-      Object.entries(attributes).map(([k, def]) => {
-        return [k, this.getOrCreateProxy(k, def, attributeOptions)];
-      }),
-    ) as AttributeApi<Attr>;
-    return api;
+    if (this.attributesApiCache === null) {
+      this.attributesApiCache = Object.fromEntries(
+        Object.entries(attributes).map(([k, def]) => {
+          return [k, this.getOrCreateProxy(k, def, attributeOptions)];
+        }),
+      ) as any;
+    }
+    return this.attributesApiCache as AttributeApi<Attr>;
   }
 
   registerProxy(attrProxy: Attribute<string, any>) {

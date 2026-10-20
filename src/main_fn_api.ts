@@ -116,7 +116,11 @@ export class ConnectedCallbackApi<
       return;
     }
     for (const cb of this.childrenChangeCallbacks) {
-      nofail(() => cb(children));
+      try {
+        cb(children);
+      } catch (err) {
+        console.error(err);
+      }
     }
   }
 

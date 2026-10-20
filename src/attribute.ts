@@ -127,12 +127,8 @@ export class Attribute<K extends string, T> {
   }
 
   get(): T | null {
-    // NOTE: falsy results (false, 0, "", NaN) are now cached too. For
-    // attributes with `observe: false` (excluded from observedAttributes)
-    // an external `setAttribute` was previously picked up by the next
-    // `get()` because falsy values were never cached; truthy values were
-    // already memoized stale before this change, so caching falsy values
-    // only extends that pre-existing behavior to falsy values.
+    // memoized values go stale for `observe: false` attributes after an
+    // external `setAttribute` — nothing clears the memo; deliberate
     if (this.memoHasValue) return this.valueMemo;
     const result = this.stringToAttrType(this.controller.get(this.attrKey)!);
     this.valueMemo = result;
@@ -228,9 +224,8 @@ export class AttributeController {
     if (oldValue === newValue) return;
 
     this.getProxy(name)?.["clearMemo"]();
-    // names in `alwaysDispatch` (listeners registered with options) must
-    // always dispatch; for the other names the dispatch can be skipped
-    // when no listeners are tracked
+    // names registered with options can't be modeled by the listener
+    // sets (capture variants), so they always dispatch
     if (!this.alwaysDispatch.has(name) && (this.listenersByAttr.get(name)?.size ?? 0) === 0) {
       return;
     }

@@ -343,8 +343,6 @@ export function customElement(tagName: string, options?: CustomElementOptions) {
                             return;
                           }
 
-                          // Drop mirrors whose child is no longer a child of this element:
-                          // disconnect the child's observer and remove the mirror node from the portal.
                           for (const [child, mirror] of this._portalMirrors) {
                             if (child.parentNode !== this) {
                               this._portalMirrors.delete(child);
@@ -354,7 +352,6 @@ export function customElement(tagName: string, options?: CustomElementOptions) {
                             }
                           }
 
-                          // Reuse existing mirrors, create mirrors for new children.
                           for (const child of this.childNodes as any as Array<Element>) {
                             if (nodeHasClassName(child, "_wc_toolkit_content_container")) {
                               continue;
@@ -364,7 +361,6 @@ export function customElement(tagName: string, options?: CustomElementOptions) {
                             }
                           }
 
-                          // Desired portal contents in child order.
                           const desired: Node[] = [];
                           for (const child of this.childNodes as any as Array<Element>) {
                             if (nodeHasClassName(child, "_wc_toolkit_content_container")) {
@@ -373,7 +369,6 @@ export function customElement(tagName: string, options?: CustomElementOptions) {
                             desired.push(this._portalMirrors.get(child)!.current());
                           }
 
-                          // Only touch the DOM when order/membership actually differs.
                           const current = this.childrenContainer.childNodes;
                           let matches = current.length === desired.length;
                           if (matches) {

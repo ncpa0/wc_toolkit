@@ -94,8 +94,8 @@ function bench(name, { setup = () => {}, fn, ops = 1000, warmup = 100 }) {
   console.log(`${name.padEnd(50)} ${usPerOp.toFixed(3)} µs/op  (${ops} ops)`);
 }
 
-// variant for scenarios that need mutation-observer delivery (which is
-// scheduled as a task/microtask and never runs inside a tight sync loop)
+// for scenarios that need mutation-observer delivery — it is scheduled
+// and never runs inside a tight sync loop
 async function benchAsync(name, { fn, ops = 200, warmup = 20 }) {
   for (let i = 0; i < warmup; i++) await fn(i);
 
@@ -195,10 +195,7 @@ bench(
 
 // 6. childrenPortal component, append-child churn (mirroredNode target).
 // The element stays mounted for the whole scenario: the element-level
-// MutationObserver is disconnected while unmounted and its delivery is
-// scheduled asynchronously, so the portal sync never runs in a tight
-// sync loop. Each op appends a churn child among 5 static children and
-// waits for the observer delivery (portal re-sync), then removes it.
+// MutationObserver is disconnected while unmounted.
 {
   const elem = document.createElement("bench-portal-elem");
   container.appendChild(elem);

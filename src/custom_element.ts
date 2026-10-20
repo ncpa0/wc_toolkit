@@ -241,7 +241,8 @@ export function customElement(tagName: string, options?: CustomElementOptions) {
                             });
                           }
 
-                          for (const [key, value] of Object.entries(attributes)) {
+                          for (const key in attributes) {
+                            const value = attributes[key]!;
                             if (key in this) {
                               console.warn(
                                 `Property '${key}' already exists on the HTMLElement, cannot assign attribute accessor. [${tagName}]`,

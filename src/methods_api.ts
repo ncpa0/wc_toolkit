@@ -322,6 +322,10 @@ export class MethodsApi<
     this.readyCallbacks.push(cb);
   }
 
+  hasReadyCallbacks() {
+    return this.readyCallbacks.length > 0;
+  }
+
   /**
    * Registers a callback that will be invoked every time any of it's dependencies changes.
    * Only the attributes can be dependencies by default, but through the `registerDependencyHandler()`

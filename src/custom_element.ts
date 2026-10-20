@@ -16,11 +16,55 @@ import {
 import { ALL_BROWSER_EVENTS_SET, mirroredNode, nodeHasClassName, toAttributeName } from "./utils";
 
 export type CustomElementOptions = {
+  /**
+   * Whether the element's children should be mirrored into a portal container
+   * that the component's rendered content can place wherever it needs them.
+   * When enabled, the container is available via the `childrenPortal` property
+   * of the connected api.
+   *
+   * @default false
+   */
   childrenPortal?: boolean;
+  /**
+   * Whether the component's rendered content should be placed in a shadow
+   * root instead of a light-DOM container div.
+   *
+   * @default false
+   */
   shadowRoot?: boolean;
+  /**
+   * Options passed to `attachShadow` when `shadowRoot` is enabled.
+   *
+   * @default { mode: "open" }
+   */
   shadowRootInit?: ShadowRootInit;
+  /**
+   * Whether the element should not manage its rendered content. When enabled,
+   * no content container is created or appended and children of the element
+   * are left as direct light-DOM children. Note that the `attach` and
+   * `replace` api methods still write into a detached container div that is
+   * never appended to the element.
+   *
+   * @default false
+   */
   noContent?: boolean;
+  /**
+   * Whether mutations of the element's descendants (their childList and
+   * characterData) should additionally be observed. Only direct childList
+   * mutations of the element are always observed.
+   *
+   * @default false
+   */
   observeSubtree?: boolean;
+  /**
+   * Whether children of the element should be observed, firing the
+   * `onChildrenChange` callbacks of the connected api. When disabled, no
+   * children-change callbacks are invoked; the children portal (when enabled)
+   * keeps syncing regardless.
+   *
+   * @default true
+   */
+  observeChildren?: boolean;
 };
 
 export type LiteralType =
@@ -163,6 +207,7 @@ export function customElement(tagName: string, options?: CustomElementOptions) {
     observeSubtree = false,
     shadowRoot = false,
     shadowRootInit,
+    observeChildren = true,
   } = options ?? {};
   return {
     /**
@@ -570,27 +615,35 @@ export function customElement(tagName: string, options?: CustomElementOptions) {
                             this.cleanups.once(cleanup);
                           }
 
-                          if (!this.mutationObserver) {
-                            this.mutationObserver = new MutationObserver((mutationRecords) => {
-                              if (!noContent) {
-                                const childLenghtCahnged = mutationRecords.some(r =>
-                                  r.addedNodes.length > 0 || r.removedNodes.length > 0
-                                );
-                                if (childLenghtCahnged) {
-                                  this._cloneChildrenIntoPortal();
+                          if (observeChildren || (!noContent && childrenPortal)) {
+                            if (!this.mutationObserver) {
+                              this.mutationObserver = new MutationObserver((mutationRecords) => {
+                                if (!noContent) {
+                                  const childLenghtCahnged = mutationRecords.some(r =>
+                                    r.addedNodes.length > 0 || r.removedNodes.length > 0
+                                  );
+                                  if (childLenghtCahnged) {
+                                    this._cloneChildrenIntoPortal();
+                                  }
                                 }
-                              }
-                              this._api["mutationObservedCallback"](mutationRecords);
+
+                                if (observeChildren) {
+                                  this._api["mutationObservedCallback"](mutationRecords);
+                                }
+                              });
+                            }
+                            this.mutationObserver!.observe(this, MUTATION_INIT);
+                            this.cleanups.once(() => {
+                              this.mutationObserver!.disconnect();
                             });
                           }
-                          this.mutationObserver!.observe(this, MUTATION_INIT);
-                          this.cleanups.once(() => {
-                            this.mutationObserver!.disconnect();
-                          });
-                          setTimeout(() => {
-                            this._api["triggerChildrenChange"](true);
-                            this._api["triggerReadyCallbacks"]();
-                          });
+
+                          if (observeChildren || this._api.hasReadyCallbacks()) {
+                            setTimeout(() => {
+                              this._api["triggerChildrenChange"](true);
+                              this._api["triggerReadyCallbacks"]();
+                            });
+                          }
                         }
 
                         disconnectedCallback() {

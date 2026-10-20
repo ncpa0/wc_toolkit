@@ -635,6 +635,42 @@ describe("customElement", () => {
     expect(onevent2).toHaveBeenCalledTimes(0);
   });
 
+  it("observeChildren: false disables children-change callbacks, the portal keeps syncing", async () => {
+    const calls: string[] = [];
+
+    const { CustomElement } = customElement("custom-elem-test10", {
+      observeChildren: false,
+      childrenPortal: true,
+    })
+      .attributes({})
+      .events()
+      .context(() => ({}))
+      .methods(() => ({}))
+      .connected(api => {
+        api.onChildrenChange(() => {
+          calls.push("children change");
+        });
+        api.replace(api.childrenPortal);
+      })
+      .register();
+
+    const elem = document.createElement("custom-elem-test10") as any as InstanceType<typeof CustomElement>;
+    document.body.appendChild(elem);
+
+    const child = document.createElement("option");
+    child.textContent = "option1";
+    elem.appendChild(child);
+    await sleep(10);
+
+    // portal still synced through the childList observer...
+    const portal = elem.querySelector("._wc_toolkit_children_container");
+    expect(portal?.textContent).toBe("option1");
+    // ...but the children-change callback never fires
+    expect(calls).toEqual([]);
+
+    elem.remove();
+  });
+
   it("invokes the ready callbacks after initialization is complete", async () => {
     const calls: string[] = [];
 

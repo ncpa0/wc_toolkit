@@ -169,6 +169,8 @@ export class AttributeController {
   private readonly emitter = new EventTarget();
   private readonly attrProxies = new Map<string, Attribute<string, any>>();
   private attributesApiCache: Record<string, Attribute<string, any>> | null = null;
+  private readonly listenersByAttr = new Map<string, Set<unknown>>();
+  private readonly alwaysDispatch = new Set<string>();
 
   constructor(
     public readonly element: HTMLElement,
@@ -217,6 +219,9 @@ export class AttributeController {
     if (oldValue === newValue) return;
 
     this.getProxy(name)?.["clearMemo"]();
+    if (this.alwaysDispatch.has(name) || (this.listenersByAttr.get(name)?.size ?? 0) === 0) {
+      return;
+    }
     this.emitter.dispatchEvent(
       new CustomEvent<AttrChangeEvDetail>(name, {
         detail: {
@@ -251,6 +256,16 @@ export class AttributeController {
     listener: (ev: CustomEvent<AttrChangeEvDetail>) => void,
     options?: boolean | AddEventListenerOptions,
   ) {
+    if (options != null) {
+      this.alwaysDispatch.add(attributeName);
+    } else {
+      let set = this.listenersByAttr.get(attributeName);
+      if (!set) {
+        set = new Set();
+        this.listenersByAttr.set(attributeName, set);
+      }
+      set.add(listener);
+    }
     this.emitter.addEventListener(attributeName, listener as any, options);
   }
 
@@ -258,6 +273,7 @@ export class AttributeController {
     attributeName: string,
     listener: (ev: CustomEvent<AttrChangeEvDetail>) => void,
   ) {
+    this.listenersByAttr.get(attributeName)?.delete(listener);
     this.emitter.removeEventListener(attributeName, listener as any);
   }
 }

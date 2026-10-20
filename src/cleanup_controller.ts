@@ -25,11 +25,12 @@ export class CleanupController {
       nofail(cleanup.fn);
     }
 
-    for (let i = this._cleanupFns.length - 1; i >= 0; i--) {
+    let write = 0;
+    for (let i = 0; i < this._cleanupFns.length; i++) {
       const cleanup = this._cleanupFns[i]!;
-      if (cleanup.once) {
-        this._cleanupFns.splice(i, 1);
-      }
+      this._cleanupFns[write] = cleanup;
+      if (!cleanup.once) write++;
     }
+    this._cleanupFns.length = write;
   }
 }

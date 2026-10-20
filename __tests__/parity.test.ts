@@ -953,8 +953,7 @@ describe("parity lock", () => {
 
       const descriptor = Object.getOwnPropertyDescriptor(elem, stateSymbol!);
       expect(descriptor!.enumerable).toBe(false);
-      // writable: method fns are cached into the state after construction
-      expect(descriptor!.writable).toBe(true);
+      expect(descriptor!.writable).toBe(false);
 
       const spread = { ...(elem as any) } as Record<symbol, unknown>;
       expect(Object.prototype.hasOwnProperty.call(spread, stateSymbol!)).toBe(false);

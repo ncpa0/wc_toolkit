@@ -383,12 +383,11 @@ export function customElement(tagName: string, options?: CustomElementOptions) {
                         constructor() {
                           super();
 
-                          // stays writable but must not be enumerable, or
-                          // `{...elem}` copies the whole internal state
-                          // out of the instance
+                          // must not be enumerable, or `{...elem}` copies
+                          // the whole internal state out of the instance
                           Object.defineProperty(this, INSTANCE_STATE, {
                             value: this[INSTANCE_STATE],
-                            writable: true,
+                            writable: false,
                             enumerable: false,
                             configurable: false,
                           });

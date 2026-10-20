@@ -88,7 +88,6 @@ function scenarioId() {
   return Number(new URLSearchParams(location.search).get("scenario") ?? "0");
 }
 
-/** Creates a bench-elem, connects it once and disconnects it again. */
 function makeDetachedBenchElem() {
   const elem = document.createElement("bench-elem");
   container.appendChild(elem);
@@ -96,8 +95,7 @@ function makeDetachedBenchElem() {
   return elem;
 }
 
-// Same shape as bench/bench.mjs `bench()`: setup, warmup, cleanup of the
-// warmup instances, then one timed loop. Returns µs/op.
+// Same shape as bench/bench.mjs `bench()` — numbers stay comparable.
 function benchSync({ setup = () => {}, fn, ops, warmup }) {
   const instances = [];
   setup(instances);
@@ -114,9 +112,7 @@ function benchSync({ setup = () => {}, fn, ops, warmup }) {
   return ((end - start) / ops) * 1000;
 }
 
-// Same shape as bench/bench.mjs `benchAsync()`. Timed region is the whole
-// loop wall-clock, including the awaits inside each op (see the header
-// comment for why that is the intended methodology here).
+// Same shape as bench/bench.mjs `benchAsync()` — numbers stay comparable.
 async function benchAsync({ fn, ops, warmup }) {
   for (let i = 0; i < warmup; i++) await fn(i);
 
@@ -192,9 +188,7 @@ const SCENARIOS = {
 
   // 6. childrenPortal component, append-child churn (mirroredNode target).
   // The element stays mounted for the whole scenario: the element-level
-  // MutationObserver only runs while connected. One flush (`await null`)
-  // after each mutation — real Chrome delivers MutationObserver records as
-  // microtasks, so a microtask tick is enough for the portal to resync.
+  // MutationObserver only runs while connected.
   async 6() {
     const elem = document.createElement("bench-portal-elem");
     container.appendChild(elem);

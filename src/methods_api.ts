@@ -2,7 +2,7 @@ import { AttributeController } from "./attribute";
 import { CleanupController } from "./cleanup_controller";
 import { AttributesDefinitions, EventsDefinitions } from "./custom_element";
 import { AttributeApi, ConstructorArgs, Value } from "./type.utils";
-import { ListenerController } from "./utils";
+import { ListenerController, nodeHasClassName } from "./utils";
 
 export type NamedEvent<Name extends string> = Event & { type: Name };
 
@@ -94,12 +94,12 @@ export class MethodsApi<
   }
 
   getChildren(): Array<Element | Text> {
-    return (Array.from(this._thisElement.childNodes) as Array<Element | Text>).filter(elem => {
-      if ("classList" in elem && elem.classList.contains("_wc_toolkit_content_container")) {
-        return false;
-      }
-      return true;
-    });
+    const children: Array<Element | Text> = [];
+    for (const node of this._thisElement.childNodes) {
+      if (nodeHasClassName(node, "_wc_toolkit_content_container")) continue;
+      children.push(node as Element | Text);
+    }
+    return children;
   }
 
   /**

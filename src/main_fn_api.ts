@@ -4,6 +4,13 @@ import { AttributesDefinitions, EventsDefinitions, MethodsDefinitions } from "./
 import { MethodsApi } from "./methods_api";
 import { nodeHasClassName, nofail } from "./utils";
 
+const everyNodeHasClassName = (nodes: NodeList, className: string) => {
+  for (const n of nodes) {
+    if (!nodeHasClassName(n, className)) return false;
+  }
+  return true;
+};
+
 declare global {
   interface WcToolkitDependencies {
     attribute: Attribute<string, any>;
@@ -79,8 +86,8 @@ export class ConnectedCallbackApi<
     if (
       mutationRecords.every(mut =>
         mut.type !== "characterData"
-        && Array.from(mut.addedNodes).every(n => nodeHasClassName(n, "_wc_toolkit_content_container"))
-        && Array.from(mut.removedNodes).every(n => nodeHasClassName(n, "_wc_toolkit_content_container"))
+        && everyNodeHasClassName(mut.addedNodes, "_wc_toolkit_content_container")
+        && everyNodeHasClassName(mut.removedNodes, "_wc_toolkit_content_container")
       )
     ) {
       return;

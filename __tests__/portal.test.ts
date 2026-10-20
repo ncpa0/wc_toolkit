@@ -188,4 +188,44 @@ describe("childrenPortal differential sync", () => {
     expect(portal!.childNodes[1]).toBe(mirror1);
     expect(portal!.childNodes[2]).toBe(textMirror);
   });
+
+  it("a mirror node stolen out of the portal is left alone when its child is removed", async () => {
+    let portal: HTMLDivElement;
+
+    const { CustomElement } = customElement("portal-test-5", { childrenPortal: true })
+      .attributes()
+      .events()
+      .context()
+      .methods()
+      .connected(api => {
+        portal = api.childrenPortal;
+      })
+      .register();
+
+    const elem = document.createElement("portal-test-5") as any as InstanceType<
+      typeof CustomElement
+    >;
+    document.body.appendChild(elem);
+
+    const child = document.createElement("div");
+    child.textContent = "child";
+    elem.appendChild(child);
+    await sleep(0);
+
+    const thiefContainer = document.createElement("div");
+    document.body.appendChild(thiefContainer);
+
+    const mirror = portal!.childNodes[0]!;
+    // move the mirror node out of the portal into foreign DOM
+    thiefContainer.appendChild(mirror);
+    expect(portal!.childNodes.length).toBe(0);
+
+    elem.removeChild(child);
+    await sleep(0);
+
+    // the stolen node stays in the consumer's DOM untouched
+    expect(thiefContainer.childNodes).toHaveLength(1);
+    expect(thiefContainer.childNodes[0]).toBe(mirror);
+    expect(portal!.childNodes.length).toBe(0);
+  });
 });

@@ -348,7 +348,12 @@ export function customElement(tagName: string, options?: CustomElementOptions) {
                               this._portalMirrors.delete(child);
                               mirror.remove();
                               const mirrorNode = mirror.current();
-                              mirrorNode.parentNode?.removeChild(mirrorNode);
+                              // only ever touch the mirror node while it
+                              // lives in the portal container; if a consumer
+                              // moved it out, leave their DOM alone
+                              if (mirrorNode.parentNode === this.childrenContainer) {
+                                this.childrenContainer.removeChild(mirrorNode);
+                              }
                             }
                           }
 

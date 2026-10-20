@@ -94,6 +94,20 @@ function bench(name, { setup = () => {}, fn, ops = 1000, warmup = 100 }) {
   console.log(`${name.padEnd(50)} ${usPerOp.toFixed(3)} µs/op  (${ops} ops)`);
 }
 
+// variant for scenarios that need mutation-observer delivery (which is
+// scheduled as a task/microtask and never runs inside a tight sync loop)
+async function benchAsync(name, { fn, ops = 200, warmup = 20 }) {
+  for (let i = 0; i < warmup; i++) await fn(i);
+
+  const start = process.hrtime.bigint();
+  for (let i = 0; i < ops; i++) await fn(i);
+  const end = process.hrtime.bigint();
+
+  const totalNs = Number(end - start);
+  const usPerOp = totalNs / ops / 1000;
+  console.log(`${name.padEnd(50)} ${usPerOp.toFixed(3)} µs/op  (${ops} ops)`);
+}
+
 // 1. createElement + append + remove (construction cost)
 bench(
   "1. create + connect + disconnect",
@@ -179,24 +193,39 @@ bench(
   );
 }
 
-// 6. childrenPortal component, append-child churn (mirroredNode target)
+// 6. childrenPortal component, append-child churn (mirroredNode target).
+// The element stays mounted for the whole scenario: the element-level
+// MutationObserver is disconnected while unmounted and its delivery is
+// scheduled asynchronously, so the portal sync never runs in a tight
+// sync loop. Each op appends a churn child among 5 static children and
+// waits for the observer delivery (portal re-sync), then removes it.
 {
   const elem = document.createElement("bench-portal-elem");
   container.appendChild(elem);
-  elem.remove();
-  bench(
-    "6. portal: append-child churn",
+  for (let i = 0; i < 30; i++) {
+    const staticChild = document.createElement("div");
+    staticChild.innerHTML = `<span class="a"><b>static ${i}</b><i>x</i></span>`;
+    elem.appendChild(staticChild);
+  }
+  await new Promise(resolve => setTimeout(resolve, 0)); // initial portal sync
+
+  await benchAsync(
+    "6. portal: churn one child among 30 statics",
     {
-      fn: (_, i) => {
+      fn: async (_, i) => {
         const child = document.createElement("div");
-        child.textContent = `child ${i}`;
+        child.textContent = `churn ${i}`;
         elem.appendChild(child);
+        await new Promise(resolve => setTimeout(resolve, 0));
         child.remove();
+        await new Promise(resolve => setTimeout(resolve, 0));
       },
-      ops: 500,
-      warmup: 50,
+      ops: 200,
+      warmup: 20,
     },
   );
+
+  elem.remove();
 }
 
 // 7. property get churn on string attr (memo hit path)

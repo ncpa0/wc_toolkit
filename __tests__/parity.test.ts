@@ -287,12 +287,12 @@ describe("parity lock", () => {
       const first = elem.getObj();
       expect(first).toBeNull();
 
-      elem.setAttribute("obj", '{"v":"a"}');
+      elem.setAttribute("obj", "{\"v\":\"a\"}");
       const second = elem.getObj();
       expect(second).toEqual({ v: "a" });
       expect(elem.getObj()).toBe(second);
 
-      elem.setAttribute("obj", '{"v":"b"}');
+      elem.setAttribute("obj", "{\"v\":\"b\"}");
       const third = elem.getObj();
       expect(third).toEqual({ v: "b" });
       expect(third).not.toBe(second);

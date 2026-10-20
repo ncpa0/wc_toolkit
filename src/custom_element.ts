@@ -92,7 +92,9 @@ type InstanceStateCarrier = { [INSTANCE_STATE]: ElementInstanceState };
  * Plain element used as the collision-check surface. The `in` operator must
  * be evaluated against an element instance (not `HTMLElement.prototype`):
  * browsers put the `on*` handlers on the prototype, happy-dom assigns them
- * as own properties on every element.
+ * as own properties on every element. Environments may provide HTMLElement
+ * without a `document`; in that case the probe stays null and collision
+ * checks fall back to the prototype-only surface.
  */
 let collisionProbe: HTMLElement | null = null;
 
@@ -239,11 +241,19 @@ export function customElement(tagName: string, options?: CustomElementOptions) {
                       const eventAccessorKeySet = new Set(
                         eventsTable.filter(event => !event.isBrowserEvent).map(event => event.accessorKey),
                       );
-                      collisionProbe ??= document.createElement("div");
+                      if (typeof document !== "undefined") {
+                        collisionProbe ??= document.createElement("div");
+                      }
+                      // the probe is the accurate collision surface (native
+                      // on* handlers live as own props in happy-dom), but it
+                      // requires a document; the prototype-only fallback is
+                      // the best available check without one
+                      const collides = (key: string) =>
+                        collisionProbe !== null ? key in collisionProbe : key in HTMLElement.prototype;
                       const collidingAttributeKeys = new Set<string>();
                       for (const attr of attributeTable) {
                         const key = attr.key;
-                        if (key in collisionProbe || ELEMENT_OWN_NAMES.has(key)) {
+                        if (collides(key) || ELEMENT_OWN_NAMES.has(key)) {
                           console.warn(
                             `Property '${key}' already exists on the HTMLElement, cannot assign attribute accessor. [${tagName}]`,
                           );
@@ -254,7 +264,7 @@ export function customElement(tagName: string, options?: CustomElementOptions) {
                       for (const event of eventsTable) {
                         if (event.isBrowserEvent) continue;
                         const key = event.accessorKey;
-                        if (key in collisionProbe || ELEMENT_OWN_NAMES.has(key) || attributeKeySet.has(key)) {
+                        if (collides(key) || ELEMENT_OWN_NAMES.has(key) || attributeKeySet.has(key)) {
                           console.warn(
                             `Property '${key}' already exists on the HTMLElement, cannot assign event callback accessor. [${tagName}]`,
                           );
@@ -298,12 +308,9 @@ export function customElement(tagName: string, options?: CustomElementOptions) {
                       const methodOwnPropKeys = new Set<string>();
 
                       const elementConstructor = class WcToolkitCustomElement extends HTMLElement {
-                        static readonly NAME = tagName;
-                        static readonly observedAttributes = observedAttributes;
-                        readonly attributeNames = observedAttributes;
-
-                        // must be initialized before any other field so it is
-                        // readable while the rest of the state is set up
+                        // must be the first initialized field: the shared
+                        // prototype accessors read this state, and they can
+                        // be reached while the remaining fields initialize
                         [INSTANCE_STATE]: ElementInstanceState = {
                           attrProxies: [],
                           eventProxies: [],
@@ -312,6 +319,10 @@ export function customElement(tagName: string, options?: CustomElementOptions) {
                           methodFns: [],
                           boundMethods: null,
                         };
+
+                        static readonly NAME = tagName;
+                        static readonly observedAttributes = observedAttributes;
+                        readonly attributeNames = observedAttributes;
 
                         private _childrenContainer: HTMLDivElement | null = null;
                         private get childrenContainer(): HTMLDivElement {
@@ -356,6 +367,17 @@ export function customElement(tagName: string, options?: CustomElementOptions) {
                         constructor() {
                           super();
 
+                          // stays writable (method fns are cached into it
+                          // after construction) but must not be enumerable,
+                          // or `{...elem}` copies the whole internal state
+                          // out of the instance
+                          Object.defineProperty(this, INSTANCE_STATE, {
+                            value: this[INSTANCE_STATE],
+                            writable: true,
+                            enumerable: false,
+                            configurable: false,
+                          });
+
                           const state = this[INSTANCE_STATE];
                           const boundMethods = this._methods as Record<string, (...args: any[]) => any>;
                           state.boundMethods = boundMethods;
@@ -367,7 +389,7 @@ export function customElement(tagName: string, options?: CustomElementOptions) {
                             if (methodStateIndexes.has(key) || methodOwnPropKeys.has(key)) continue;
 
                             if (
-                              key in HTMLElement.prototype || ELEMENT_OWN_NAMES.has(key)
+                              collides(key) || ELEMENT_OWN_NAMES.has(key)
                               || attributeKeySet.has(key) || eventAccessorKeySet.has(key)
                             ) {
                               // the method keeps the name (methods were defined
@@ -596,8 +618,20 @@ export function customElement(tagName: string, options?: CustomElementOptions) {
                         });
                       }
 
+                      const definedEventAccessorKeys = new Set<string>();
                       for (const event of eventsTable) {
                         if (event.isBrowserEvent || collidingEventAccessorKeys.has(event.accessorKey)) continue;
+                        // event names differing only in case share an
+                        // accessor key; redefining the non-configurable
+                        // property would throw, so the second entry only
+                        // warns and both keep their listener machinery
+                        if (definedEventAccessorKeys.has(event.accessorKey)) {
+                          console.warn(
+                            `Property '${event.accessorKey}' already exists on the HTMLElement, cannot assign event callback accessor. [${tagName}]`,
+                          );
+                          continue;
+                        }
+                        definedEventAccessorKeys.add(event.accessorKey);
                         const stateIndex = event.stateIndex;
                         const lowercaseType = event.accessorKey.slice(2);
                         Object.defineProperty(elementConstructor.prototype, event.accessorKey, {

@@ -728,5 +728,84 @@ describe("parity lock", () => {
       expect(elem.querySelector("span")!.textContent).toBe("hello");
       expect(elem.querySelector("._wc_toolkit_content_container")).not.toBeNull();
     });
+
+    it("event names differing only in case warn once per definition and both event types still dispatch", () => {
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const htmlHandler = vi.fn();
+
+      try {
+        const { CustomElement } = customElement("g2-elem-4")
+          .attributes()
+          .events({ myEvent: CustomEvent, MyEvent: CustomEvent })
+          .context()
+          .methods(api => ({
+            emitLower() {
+              api.emitEvent("myEvent");
+            },
+            emitUpper() {
+              api.emitEvent("MyEvent");
+            },
+          }))
+          .connected(() => {})
+          .register();
+
+        // the second accessor definition is skipped with the same warning
+        // text used for event accessor collisions
+        expect(warnSpy).toHaveBeenCalledTimes(1);
+        expect(warnSpy).toHaveBeenCalledWith(
+          "Property 'onmyevent' already exists on the HTMLElement, cannot assign event callback accessor. [g2-elem-4]",
+        );
+
+        const elem = document.createElement("g2-elem-4") as any as InstanceType<typeof CustomElement>;
+        (elem as any)._htmlHandler = htmlHandler;
+        elem.setAttribute("onmyevent", "event.target._htmlHandler(event)");
+
+        elem.emitLower();
+        expect(htmlHandler).toHaveBeenCalledTimes(1);
+        expect(htmlHandler.mock.lastCall![0]!.type).toBe("myEvent");
+
+        elem.emitUpper();
+        expect(htmlHandler).toHaveBeenCalledTimes(2);
+        expect(htmlHandler.mock.lastCall![0]!.type).toBe("MyEvent");
+
+        // further instances add no warns
+        document.createElement("g2-elem-4");
+        expect(warnSpy).toHaveBeenCalledTimes(1);
+      } finally {
+        warnSpy.mockRestore();
+      }
+    });
+
+    it("the per-instance state symbol is non-enumerable and invisible to spreads", () => {
+      const { CustomElement } = customElement("g2-elem-5")
+        .attributes({ foo: "string" })
+        .events()
+        .context()
+        .methods(() => ({
+          doThing: () => 1,
+        }))
+        .connected(() => {})
+        .register();
+
+      const elem = document.createElement("g2-elem-5") as any as InstanceType<typeof CustomElement>;
+
+      // force the lazily-cached method path so any late state writes happen
+      elem.doThing();
+
+      // happy-dom keeps its own internals as enumerable own symbol props,
+      // so the state symbol is located by description
+      const stateSymbol = Object.getOwnPropertySymbols(elem).find(symbol =>
+        symbol.description?.includes("instance_state")
+      );
+      expect(stateSymbol).toBeDefined();
+
+      const descriptor = Object.getOwnPropertyDescriptor(elem, stateSymbol!);
+      expect(descriptor!.enumerable).toBe(false);
+      // writable: method fns are cached into the state after construction
+      expect(descriptor!.writable).toBe(true);
+
+      const spread = { ...(elem as any) } as Record<symbol, unknown>;
+      expect(Object.prototype.hasOwnProperty.call(spread, stateSymbol!)).toBe(false);
+    });
   });
 });

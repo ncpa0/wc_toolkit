@@ -93,7 +93,7 @@ const INSTANCE_STATE = Symbol("wc_toolkit:instance_state");
  * where the generic class type isn't available.
  */
 type ElementApiCarrier = {
-  _api?: {
+  _api: {
     method: Record<string, (...args: any[]) => any>;
     attribute: Record<string, Attribute<string, any>>;
   };
@@ -430,11 +430,7 @@ export function customElement(tagName: string, options?: CustomElementOptions) {
                                 enumerable: false,
                                 configurable: false,
                                 get: function(this: ElementApiCarrier) {
-                                  // `_api` is still undefined while the
-                                  // construction window (the user callbacks
-                                  // computing it) is running; the accessor
-                                  // must return undefined then, not crash
-                                  return this._api?.method[key];
+                                  return this._api.method[key];
                                 },
                               });
                             }
@@ -615,23 +611,21 @@ export function customElement(tagName: string, options?: CustomElementOptions) {
                         }
                       };
 
-                      // attribute accessors are defined once per definition on
-                      // the prototype; the shared closures read the attribute
-                      // proxies through the per-instance api object
+                      // the attribute / method accessors throw when touched
+                      // inside getContext()/methods() — those callbacks run
+                      // before the per-instance api object exists; mutate
+                      // in connected() instead
                       for (const attr of attributeTable) {
                         if (collidingAttributeKeys.has(attr.key)) continue;
                         Object.defineProperty(elementConstructor.prototype, attr.key, {
                           enumerable: false,
                           configurable: false,
                           get: function(this: ElementApiCarrier) {
-                            // `_api` is undefined during the construction
-                            // window (user callbacks run before it exists):
-                            // reads return undefined, writes no-op
-                            const proxy = this._api?.attribute[attr.key];
+                            const proxy = this._api.attribute[attr.key];
                             return proxy?.get();
                           },
                           set: function(this: ElementApiCarrier, value: any) {
-                            const proxy = this._api?.attribute[attr.key];
+                            const proxy = this._api.attribute[attr.key];
                             proxy?.set(value);
                           },
                         });

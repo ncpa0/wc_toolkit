@@ -1051,36 +1051,65 @@ describe("parity lock", () => {
   });
 
   describe("construction window lock", () => {
-    it("instance accessors reached during getMethods don't throw: reads are undefined and writes are no-ops", () => {
-      const reads: unknown[] = [];
+    it("accessor use inside methods()/getContext() throws; accessors work after construction", () => {
+      const constructionErrors: unknown[] = [];
+      // each touch gets its own try/catch so one throw doesn't mask the rest
+      const capture = (touch: () => void) => {
+        try {
+          touch();
+        } catch (error) {
+          constructionErrors.push(error);
+        }
+      };
 
       const { CustomElement } = customElement("cw-elem-1")
         .attributes({ foo: "string" })
         .events()
-        .context()
+        .context(attributes => {
+          // the context api has no element handle; dig the element out of
+          // the attribute proxy's controller to reach the accessors
+          const elem = ((attributes.foo as any).controller as AttributeController).element as any;
+          capture(() => void elem.foo);
+          capture(() => {
+            elem.foo = "written-in-getContext";
+          });
+          capture(() => void elem.doThing);
+          return {};
+        })
         .methods(api => {
           const elem = api.thisElement as any;
-          elem.foo = "written-during-getMethods";
-          reads.push(elem.foo, elem.doThing);
+          capture(() => void elem.foo);
+          capture(() => {
+            elem.foo = "written-in-getMethods";
+          });
+          capture(() => void elem.doThing);
           return { doThing: () => 1 };
         })
         .connected(() => {})
         .register();
 
-      // the first instance defines the prototype accessors; the second
-      // one reaches them while its own api object is still absent
-      const elem1 = document.createElement("cw-elem-1") as any as InstanceType<typeof CustomElement>;
-      const elem2 = document.createElement("cw-elem-1") as any as InstanceType<typeof CustomElement>;
+      // the first instance only exists to define the prototype method
+      // accessors; its errors are cleared so the second instance's
+      // construction window is what gets locked
+      document.createElement("cw-elem-1");
+      constructionErrors.length = 0;
 
-      expect(reads).toEqual([undefined, undefined, undefined, undefined]);
-      expect(elem1.getAttribute("foo")).toBeNull();
-      expect(elem2.getAttribute("foo")).toBeNull();
+      const elem = document.createElement("cw-elem-1") as any as InstanceType<typeof CustomElement>;
 
-      // after the window the accessors work normally
-      expect(elem1.doThing()).toBe(1);
-      expect(elem2.doThing()).toBe(1);
-      elem2.foo = "ok";
-      expect(elem2.getAttribute("foo")).toBe("ok");
+      // three touches (attribute read, attribute write, method read) in
+      // each of getContext and getMethods, all failing fast
+      expect(constructionErrors).toHaveLength(6);
+      for (const error of constructionErrors) {
+        expect(error).toBeInstanceOf(TypeError);
+      }
+
+      // none of the failed writes landed
+      expect(elem.getAttribute("foo")).toBeNull();
+
+      // after construction the accessors work normally
+      expect(elem.doThing()).toBe(1);
+      elem.foo = "ok";
+      expect(elem.foo).toBe("ok");
     });
   });
 

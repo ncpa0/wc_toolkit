@@ -498,17 +498,25 @@ export function customElement(tagName: string, options?: CustomElementOptions) {
                             }
                           }
 
-                          for (const child of this.childNodes as any as Array<Element>) {
+                          for (
+                            let child = this.firstChild;
+                            child !== null;
+                            child = child.nextSibling
+                          ) {
                             if (nodeHasClassName(child, "_wc_toolkit_content_container")) {
                               continue;
                             }
                             if (!this._portalMirrors.has(child)) {
-                              this._portalMirrors.set(child, mirroredNode(child));
+                              this._portalMirrors.set(child, mirroredNode(child as Element));
                             }
                           }
 
                           const desired: Node[] = [];
-                          for (const child of this.childNodes as any as Array<Element>) {
+                          for (
+                            let child = this.firstChild;
+                            child !== null;
+                            child = child.nextSibling
+                          ) {
                             if (nodeHasClassName(child, "_wc_toolkit_content_container")) {
                               continue;
                             }

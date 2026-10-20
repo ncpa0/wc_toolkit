@@ -673,6 +673,52 @@ describe("parity lock", () => {
       expect(elem.getKids()).toHaveLength(1);
       expect(child.parentNode).toBe(elem);
     });
+
+    it("returns mixed text and element children in document order, excluding the content container (plan G5 lock)", () => {
+      const { CustomElement } = customElement("g5-elem-1")
+        .attributes()
+        .events()
+        .context()
+        .methods(api => ({
+          getKids(): Array<Element | Text> {
+            return api.getChildren();
+          },
+        }))
+        .connected(() => {})
+        .register();
+
+      const elem = document.createElement("g5-elem-1") as any as InstanceType<typeof CustomElement>;
+
+      const text1 = document.createTextNode("first");
+      const child = document.createElement("span");
+      child.textContent = "middle";
+      const text2 = document.createTextNode("last");
+      elem.append(text1, child, text2);
+
+      document.body.appendChild(elem);
+
+      // the container div is present in the element but must not leak
+      // into getChildren()
+      const container = elem.querySelector("._wc_toolkit_content_container");
+      expect(container).not.toBeNull();
+      expect(container!.parentNode).toBe(elem);
+
+      const children = elem.getKids();
+      expect(children).toHaveLength(3);
+      expect(children[0]).toBe(text1);
+      expect(children[1]).toBe(child);
+      expect(children[2]).toBe(text2);
+      expect(children[0]!.nodeType).toBe(Node.TEXT_NODE);
+      expect(children[1]!.nodeType).toBe(Node.ELEMENT_NODE);
+      expect(children[2]!.nodeType).toBe(Node.TEXT_NODE);
+
+      // fresh array per call
+      const again = elem.getKids();
+      expect(again).not.toBe(children);
+      expect(again[0]).toBe(text1);
+      expect(again[1]).toBe(child);
+      expect(again[2]).toBe(text2);
+    });
   });
 
   describe("childrenPortal shape", () => {

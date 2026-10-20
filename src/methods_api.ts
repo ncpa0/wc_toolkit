@@ -162,7 +162,7 @@ export class MethodsApi<
 
   getChildren(): Array<Element | Text> {
     const children: Array<Element | Text> = [];
-    for (const node of this._thisElement.childNodes) {
+    for (let node = this._thisElement.firstChild; node !== null; node = node.nextSibling) {
       if (nodeHasClassName(node, "_wc_toolkit_content_container")) continue;
       children.push(node as Element | Text);
     }

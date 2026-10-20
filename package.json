@@ -13,10 +13,13 @@
       "default": "./styles.css"
     }
   },
-  "keywords": [],
+  "keywords": [
+    "web component",
+    "web components"
+  ],
   "repository": {
     "type": "git",
-    "url": ""
+    "url": "https://github.com/ncpa0/wc_toolkit"
   },
   "files": [
     "dist",
@@ -28,7 +31,7 @@
   "license": "MIT",
   "author": {
     "name": "Szymon Bretner (ncpa0cpl)",
-    "email": ""
+    "email": "szymonb21@gmail.com"
   },
   "scripts": {
     "test:tsc": "tsc --noEmit",

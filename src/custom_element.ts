@@ -3,7 +3,7 @@ import { AttributeController } from "./attribute";
 import { CleanupController } from "./cleanup_controller";
 import { FunctionAttributeParser } from "./function-parser";
 import type { ConnectedCallbackApi } from "./main_fn_api";
-import { MethodsApi } from "./methods_api";
+import { GetMethodsApi, MethodsApi } from "./methods_api";
 import {
   AttributeAccessors,
   AttributeApi,
@@ -180,7 +180,9 @@ export function customElement(tagName: string, options?: CustomElementOptions) {
                  */
                 methods<Methods extends MethodsDefinitions = {}>(
                   getMethods: (
-                    customElementApi: MethodsApi<Attr, Evnts, Ctx>,
+                    // `method` is not exposed here: it is still undefined
+                    // while this callback computes it
+                    customElementApi: GetMethodsApi<Attr, Evnts, Ctx>,
                   ) => Methods = () => ({} as any),
                 ) {
                   return {

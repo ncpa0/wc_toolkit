@@ -1,7 +1,7 @@
 import { AttributeController } from "./attribute";
 import { CleanupController } from "./cleanup_controller";
 import { AttributesDefinitions, EventsDefinitions, MethodsDefinitions } from "./custom_element";
-import { getDependencyHandler, type Dependency } from "./main_fn_api";
+import { type Dependency, getDependencyHandler } from "./main_fn_api";
 import { AttributeApi, ConstructorArgs, Value } from "./type.utils";
 import { ListenerController, nodeHasClassName } from "./utils";
 
@@ -57,6 +57,17 @@ const bindAll = (methods: Record<string, (...args: any[]) => any>) => {
 };
 
 /**
+ * The api object handed to `getMethods` — identical to `MethodsApi` except
+ * `method` is absent: it is the very value this callback computes, so it is
+ * still undefined while the callback runs.
+ */
+export type GetMethodsApi<
+  Attr extends AttributesDefinitions,
+  Evnts extends EventsDefinitions,
+  Ctx extends object,
+> = Omit<MethodsApi<Attr, Evnts, Ctx>, "method">;
+
+/**
  * The single per-instance api object handed to `getMethods` and to the
  * connected callback.
  */
@@ -91,7 +102,7 @@ export class MethodsApi<
     attributes: Attr,
     context: Ctx,
     getChildrenPortal: () => HTMLDivElement,
-    getMethods: (api: MethodsApi<Attr, Evnts, Ctx, Methods>) => Methods,
+    getMethods: (api: GetMethodsApi<Attr, Evnts, Ctx>) => Methods,
   ) {
     this._thisElement = thisElement;
     this.cleanups = cleanups;

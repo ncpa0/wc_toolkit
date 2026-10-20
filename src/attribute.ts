@@ -272,16 +272,19 @@ export class AttributeController {
       return;
     }
 
-    const value = proxy !== undefined ? proxy.get() : newValue;
-
-    // iterate a snapshot, listeners may unsubscribe during dispatch;
-    // `once` entries are dropped before their invocation
+    // iterate a snapshot; membership is re-checked before each invocation
+    // so a listener removed by an earlier listener in the same dispatch is
+    // skipped (the removed-listener semantics of the old EventTarget
+    // emitter), and the value is re-read per invocation so listeners
+    // observe writes made mid-dispatch (`get()` is a memo hit after the
+    // first read); `once` entries are still dropped before their invocation
     const snapshot = listeners.slice();
     for (const entry of snapshot) {
+      if (!listeners.some(current => current.listener === entry.listener)) continue;
       if (entry.once) {
         this.removeEventListener(name, entry.listener);
       }
-      entry.listener(value);
+      entry.listener(proxy !== undefined ? proxy.get() : newValue);
     }
   }
 
@@ -308,8 +311,11 @@ export class AttributeController {
     listener: AttrChangeListener,
     options?: boolean | AddEventListenerOptions,
   ) {
-    // capture / bubble carry no meaning without a dispatch hierarchy and
-    // `signal` was never honored here; only `once` has an effect
+    // options are not forwarded to an EventTarget anymore, so `signal` is
+    // not supported here and the old emitter's capture-partitioned dedup
+    // (the same listener registered with and without `capture` fired twice)
+    // is not modeled; only `once` has an effect — callers needing `signal`
+    // or capture use the element's `addEventListener`
     const once = typeof options === "object" && options.once === true;
 
     const listeners = this.getListeners(attributeName);

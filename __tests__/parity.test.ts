@@ -246,10 +246,8 @@ describe("parity lock", () => {
 
   describe("AttributeController change-event shape", () => {
     const jsonParser = {
-      fromString: (attr: string | null): { v: string } | null =>
-        attr == null ? null : JSON.parse(attr),
-      intoString: (attr: { v: string } | null): string | null =>
-        attr == null ? null : JSON.stringify(attr),
+      fromString: (attr: string | null): { v: string } | null => attr == null ? null : JSON.parse(attr),
+      intoString: (attr: { v: string } | null): string | null => attr == null ? null : JSON.stringify(attr),
     };
 
     it("listeners receive the freshly parsed attribute value, not an event", () => {
@@ -264,20 +262,20 @@ describe("parity lock", () => {
       });
 
       // the dispatch re-parses the attribute currently set on the element
-      elem.setAttribute("foo", '{"v":"a"}');
-      controller.attributeChangedCallback("foo", null, '{"v":"a"}');
+      elem.setAttribute("foo", "{\"v\":\"a\"}");
+      controller.attributeChangedCallback("foo", null, "{\"v\":\"a\"}");
       expect(received).toEqual([{ v: "a" }]);
       expect(received[0]).not.toBeInstanceOf(Event);
 
       // the value was parsed fresh from the raw string on this dispatch...
       const first = received[0];
-      elem.setAttribute("foo", '{"v":"b"}');
-      controller.attributeChangedCallback("foo", '{"v":"a"}', '{"v":"b"}');
+      elem.setAttribute("foo", "{\"v\":\"b\"}");
+      controller.attributeChangedCallback("foo", "{\"v\":\"a\"}", "{\"v\":\"b\"}");
       expect(received[1]).toEqual({ v: "b" });
       // ...and parsing back to the same content yields a new object, so
       // every dispatch re-parses instead of reusing a stale memo
-      elem.setAttribute("foo", '{"v":"a"}');
-      controller.attributeChangedCallback("foo", '{"v":"b"}', '{"v":"a"}');
+      elem.setAttribute("foo", "{\"v\":\"a\"}");
+      controller.attributeChangedCallback("foo", "{\"v\":\"b\"}", "{\"v\":\"a\"}");
       expect(received[2]).toEqual({ v: "a" });
       expect(received[2]).not.toBe(first);
     });
@@ -349,6 +347,55 @@ describe("parity lock", () => {
       controller.attributeChangedCallback("foo", "b", "c");
       expect(plainCalls).toHaveBeenCalledTimes(1);
       expect(optionsCalls).toHaveBeenCalledTimes(2);
+    });
+
+    it("skips a listener removed by an earlier listener in the same dispatch", () => {
+      const controller = new AttributeController(document.createElement("div"));
+
+      const second = vi.fn();
+      controller.addEventListener("foo", () => {
+        controller.removeEventListener("foo", second);
+      });
+      controller.addEventListener("foo", second);
+
+      controller.attributeChangedCallback("foo", "a", "b");
+      expect(second).not.toHaveBeenCalled();
+    });
+
+    it("listeners observe attribute writes made mid-dispatch", () => {
+      const elem = document.createElement("div");
+      const controller = new AttributeController(elem);
+      const proxy = Attribute.new(controller, "number", "foo");
+
+      const received: unknown[] = [];
+      controller.addEventListener("foo", () => {
+        proxy.set(2);
+      });
+      controller.addEventListener("foo", value => {
+        received.push(value);
+      });
+
+      controller.attributeChangedCallback("foo", null, "1");
+      expect(received).toEqual([2]);
+    });
+
+    it("once listener count-skip after self-removal: later dispatches neither fire it nor throw", () => {
+      const controller = new AttributeController(document.createElement("div"));
+
+      const onceCalls = vi.fn();
+      const laterCalls = vi.fn();
+      controller.addEventListener("foo", onceCalls, { once: true });
+      controller.addEventListener("foo", laterCalls);
+
+      controller.attributeChangedCallback("foo", "a", "b");
+      expect(onceCalls).toHaveBeenCalledTimes(1);
+      expect(laterCalls).toHaveBeenCalledTimes(1);
+
+      // the once entry removed itself; the next dispatch must neither
+      // invoke it again nor throw
+      controller.attributeChangedCallback("foo", "b", "c");
+      expect(onceCalls).toHaveBeenCalledTimes(1);
+      expect(laterCalls).toHaveBeenCalledTimes(2);
     });
   });
 
@@ -907,6 +954,58 @@ describe("parity lock", () => {
       expect(received).toEqual([5, true]);
       elem.setAttribute("active", "1");
       expect(received).toEqual([5, true]);
+    });
+
+    it("htmlName override: dispatch and onChange registration happen under the overridden name", () => {
+      const received: unknown[] = [];
+
+      const { CustomElement } = customElement("g3-elem-2")
+        .attributes({ bar: "number" }, { bar: { htmlName: "xfoo" } })
+        .events()
+        .context()
+        .methods()
+        .connected(api => {
+          api.attribute.bar.onChange(value => {
+            received.push(value);
+          });
+        })
+        .register();
+
+      // element-level observation happens under the overridden name
+      expect(CustomElement.observedAttributes).toContain("xfoo");
+
+      const elem = document.createElement("g3-elem-2") as any as InstanceType<typeof CustomElement>;
+      document.body.appendChild(elem);
+
+      elem.setAttribute("xfoo", "42");
+      expect(received).toEqual([42]);
+      expect(received[0]).not.toBeInstanceOf(Event);
+
+      // the property accessor maps to the overridden name too
+      expect(elem.bar).toBe(42);
+      elem.bar = 7;
+      expect(elem.getAttribute("xfoo")).toBe("7");
+      expect(received).toEqual([42, 7]);
+    });
+  });
+
+  describe("getMethods api typing (plan G4 lock)", () => {
+    it("the getMethods api does not expose `method`; the connected api does", () => {
+      const { CustomElement } = customElement("g4-elem-1")
+        .attributes()
+        .events()
+        .context()
+        .methods(api => {
+          // @ts-expect-error `method` is still undefined inside getMethods
+          void api.method;
+          return {};
+        })
+        .connected(api => {
+          expect(typeof api.method).toBe("object");
+        })
+        .register();
+
+      document.createElement("g4-elem-1");
     });
   });
 });

@@ -194,6 +194,8 @@ export const ALL_BROWSER_EVENTS = [
   "wheel",
 ];
 
+export const ALL_BROWSER_EVENTS_SET = new Set(ALL_BROWSER_EVENTS);
+
 export function nofail(fn: () => any) {
   try {
     fn();

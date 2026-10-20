@@ -12,7 +12,7 @@ import {
   EventAttributeAcessors,
   PublicMethods,
 } from "./type.utils";
-import { ALL_BROWSER_EVENTS, mirroredNode, toAttributeName } from "./utils";
+import { ALL_BROWSER_EVENTS_SET, mirroredNode, toAttributeName } from "./utils";
 
 export type CustomElementOptions = {
   childrenPortal?: boolean;
@@ -158,7 +158,7 @@ export function customElement(tagName: string, options?: CustomElementOptions) {
                       for (let eventType of events) {
                         eventType = eventType.toLowerCase();
                         // only custom events need additional handling
-                        if (!ALL_BROWSER_EVENTS.includes(eventType)) {
+                        if (!ALL_BROWSER_EVENTS_SET.has(eventType)) {
                           observedAttributes.push(`on${eventType}`);
                         }
                       }
@@ -267,7 +267,7 @@ export function customElement(tagName: string, options?: CustomElementOptions) {
                             const accessorKey = `on${lowercaseType}`;
 
                             // only custom events need additional handling
-                            if (ALL_BROWSER_EVENTS.includes(lowercaseType)) {
+                            if (ALL_BROWSER_EVENTS_SET.has(lowercaseType)) {
                               continue;
                             }
 

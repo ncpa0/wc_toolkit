@@ -180,6 +180,12 @@ export function customElement(tagName: string, options?: CustomElementOptions) {
                         return root;
                       };
 
+                      const MUTATION_INIT: MutationObserverInit = {
+                        childList: true,
+                        characterData: true,
+                        subtree: observeSubtree,
+                      };
+
                       const initiateMethods = (methodsApi: MethodsApi<Attr, Evnts, Ctx>) => {
                         const methods = getMethods(methodsApi);
                         for (const key in methods) {
@@ -362,25 +368,22 @@ export function customElement(tagName: string, options?: CustomElementOptions) {
                             this.cleanups.once(cleanup);
                           }
 
-                          this.mutationObserver = new MutationObserver((mutationRecords) => {
-                            if (!noContent) {
-                              const childLenghtCahnged = mutationRecords.some(r =>
-                                r.addedNodes.length > 0 || r.removedNodes.length > 0
-                              );
-                              if (childLenghtCahnged) {
-                                this._cloneChildrenIntoPortal();
+                          if (!this.mutationObserver) {
+                            this.mutationObserver = new MutationObserver((mutationRecords) => {
+                              if (!noContent) {
+                                const childLenghtCahnged = mutationRecords.some(r =>
+                                  r.addedNodes.length > 0 || r.removedNodes.length > 0
+                                );
+                                if (childLenghtCahnged) {
+                                  this._cloneChildrenIntoPortal();
+                                }
                               }
-                            }
-                            this._mainFuncApi["mutationObservedCallback"](mutationRecords);
-                          });
-                          this.mutationObserver.observe(this, {
-                            childList: true,
-                            characterData: true,
-                            subtree: observeSubtree,
-                          });
+                              this._mainFuncApi["mutationObservedCallback"](mutationRecords);
+                            });
+                          }
+                          this.mutationObserver!.observe(this, MUTATION_INIT);
                           this.cleanups.once(() => {
                             this.mutationObserver!.disconnect();
-                            this.mutationObserver = undefined;
                           });
                           setTimeout(() => {
                             this._mainFuncApi["triggerChildrenChange"](true);

@@ -182,11 +182,44 @@ export class Attribute<K extends string, T> {
 export class AttributeController {
   private readonly attrProxies = new Map<string, Attribute<string, any>>();
   private attributesApiCache: Record<string, Attribute<string, any>> | null = null;
-  private readonly listenersByAttr = new Map<string, Array<AttrListenerEntry>>();
+  /**
+   * Listener-name → slot index. Seeded with the definition-time indexes
+   * (see `attrListenerNameIndexes` in `customElement().connected()`),
+   * names outside the definition get appended slots.
+   */
+  private readonly listenerNameIndexes: Map<string, number>;
+  /**
+   * Listener arrays indexed by the definition-time attribute index;
+   * slots are created on first use.
+   */
+  private readonly listenerSlots: Array<Array<AttrListenerEntry> | undefined> = [];
+  private nextFreeIndex = 0;
 
   constructor(
     public readonly element: HTMLElement,
-  ) {}
+    listenerNameIndexes?: ReadonlyMap<string, number>,
+  ) {
+    this.listenerNameIndexes = listenerNameIndexes === undefined ? new Map() : new Map(listenerNameIndexes);
+    let next = 0;
+    for (const index of this.listenerNameIndexes.values()) {
+      if (index >= next) next = index + 1;
+    }
+    this.nextFreeIndex = next;
+  }
+
+  private getListeners(attributeName: string): Array<AttrListenerEntry> {
+    let index = this.listenerNameIndexes.get(attributeName);
+    if (index === undefined) {
+      index = this.nextFreeIndex++;
+      this.listenerNameIndexes.set(attributeName, index);
+    }
+    let listeners = this.listenerSlots[index];
+    if (listeners === undefined) {
+      listeners = [];
+      this.listenerSlots[index] = listeners;
+    }
+    return listeners;
+  }
 
   getAttributesApi<Attr extends AttributesDefinitions>(
     attributes: Attr,
@@ -233,7 +266,8 @@ export class AttributeController {
     const proxy = this.getProxy(name);
     proxy?.["clearMemo"]();
 
-    const listeners = this.listenersByAttr.get(name);
+    const index = this.listenerNameIndexes.get(name);
+    const listeners = index === undefined ? undefined : this.listenerSlots[index];
     if (listeners === undefined || listeners.length === 0) {
       return;
     }
@@ -278,11 +312,7 @@ export class AttributeController {
     // `signal` was never honored here; only `once` has an effect
     const once = typeof options === "object" && options.once === true;
 
-    let listeners = this.listenersByAttr.get(attributeName);
-    if (listeners === undefined) {
-      listeners = [];
-      this.listenersByAttr.set(attributeName, listeners);
-    }
+    const listeners = this.getListeners(attributeName);
 
     // an identical listener only ever gets one entry
     for (const entry of listeners) {
@@ -296,7 +326,8 @@ export class AttributeController {
     attributeName: string,
     listener: AttrChangeListener,
   ) {
-    const listeners = this.listenersByAttr.get(attributeName);
+    const index = this.listenerNameIndexes.get(attributeName);
+    const listeners = index === undefined ? undefined : this.listenerSlots[index];
     if (listeners === undefined) return;
 
     for (let i = 0; i < listeners.length; i++) {

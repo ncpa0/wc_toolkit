@@ -1,6 +1,7 @@
 import { AttributeController } from "./attribute";
 import { CleanupController } from "./cleanup_controller";
-import { AttributesDefinitions, EventsDefinitions } from "./custom_element";
+import { AttributesDefinitions, EventsDefinitions, MethodsDefinitions } from "./custom_element";
+import { getDependencyHandler, type Dependency } from "./main_fn_api";
 import { AttributeApi, ConstructorArgs, Value } from "./type.utils";
 import { ListenerController, nodeHasClassName } from "./utils";
 
@@ -40,23 +41,74 @@ export class CustomElementEvent<Details> extends Event {
   }
 }
 
+const everyNodeHasClassName = (nodes: NodeList, className: string) => {
+  for (const n of nodes) {
+    if (!nodeHasClassName(n, className)) return false;
+  }
+  return true;
+};
+
+const bindAll = (methods: Record<string, (...args: any[]) => any>) => {
+  for (const key in methods) {
+    const method = methods[key]!;
+    methods[key] = method.bind(methods);
+  }
+  return methods;
+};
+
+/**
+ * The single per-instance api object handed to `getMethods` and to the
+ * connected callback.
+ */
 export class MethodsApi<
   Attr extends AttributesDefinitions,
   Evnts extends EventsDefinitions,
   Ctx extends object,
+  Methods extends MethodsDefinitions = {},
 > {
   readonly attribute: AttributeApi<Attr>;
 
+  readonly method: Methods;
+
+  readonly context: Ctx;
+
+  private readonly _thisElement: HTMLElement;
+  private readonly cleanups: CleanupController;
+  protected readonly attributeController: AttributeController;
+  protected readonly root: HTMLElement | ShadowRoot;
+  protected readonly eventsRecord: Evnts;
+  private readonly getChildrenPortal: () => HTMLDivElement;
+  private readonly childrenChangeCallbacks: Array<(children: Array<Element | Text>) => void> = [];
+  private readonly readyCallbacks: Array<() => any> = [];
+  private isMutCbQueued = false;
+
   constructor(
-    protected readonly _thisElement: HTMLElement,
-    protected readonly cleanups: CleanupController,
-    public readonly context: Ctx,
-    protected readonly attributeController: AttributeController,
-    protected readonly root: HTMLElement | ShadowRoot,
-    protected readonly eventsRecord: Evnts,
+    thisElement: HTMLElement,
+    cleanups: CleanupController,
+    attributeController: AttributeController,
+    root: HTMLElement | ShadowRoot,
+    eventsRecord: Evnts,
     attributes: Attr,
+    context: Ctx,
+    getChildrenPortal: () => HTMLDivElement,
+    getMethods: (api: MethodsApi<Attr, Evnts, Ctx, Methods>) => Methods,
   ) {
+    this._thisElement = thisElement;
+    this.cleanups = cleanups;
+    this.attributeController = attributeController;
+    this.root = root;
+    this.eventsRecord = eventsRecord;
+    this.getChildrenPortal = getChildrenPortal;
+    this.context = context;
     this.attribute = attributeController.getAttributesApi(attributes);
+
+    const methods = getMethods(this) as Record<string, (...args: any[]) => any>;
+    this.method = bindAll(methods) as Methods;
+
+    cleanups.add(() => {
+      this.childrenChangeCallbacks.splice(0, this.childrenChangeCallbacks.length);
+      this.readyCallbacks.splice(0, this.readyCallbacks.length);
+    });
   }
 
   get thisElement(): HTMLElement {
@@ -66,6 +118,10 @@ export class MethodsApi<
   get isMounted(): boolean {
     // @ts-expect-error
     return this._thisElement.isMounted;
+  }
+
+  get childrenPortal(): HTMLDivElement {
+    return this.getChildrenPortal();
   }
 
   /**
@@ -182,6 +238,117 @@ export class MethodsApi<
     }
 
     return CANCELLED_EMIT;
+  }
+
+  protected mutationObservedCallback(mutationRecords: MutationRecord[]) {
+    if (this.isMutCbQueued) {
+      return;
+    }
+
+    if (
+      mutationRecords.every(mut =>
+        mut.type !== "characterData"
+        && everyNodeHasClassName(mut.addedNodes, "_wc_toolkit_content_container")
+        && everyNodeHasClassName(mut.removedNodes, "_wc_toolkit_content_container")
+      )
+    ) {
+      return;
+    }
+
+    this.isMutCbQueued = true;
+    setTimeout(() => {
+      this.isMutCbQueued = false;
+      this.triggerChildrenChange();
+    });
+  }
+
+  protected triggerReadyCallbacks() {
+    for (let cb = this.readyCallbacks.shift(); cb != null; cb = this.readyCallbacks.shift()) {
+      try {
+        cb();
+      } catch (err) {
+        console.error(err);
+      }
+    }
+  }
+
+  protected triggerChildrenChange(skipIfZero = false) {
+    const children = this.getChildren();
+    if (skipIfZero && children.length === 0) {
+      return;
+    }
+    for (const cb of this.childrenChangeCallbacks) {
+      try {
+        cb(children);
+      } catch (err) {
+        console.error(err);
+      }
+    }
+  }
+
+  /**
+   * Registers a callback that will be invoked whenever a direct children of
+   * this Web Component is changed, added or removed. This only includes childrens
+   * passed to it from outside, and doesn't include children added by this web component.
+   *
+   * These callbacks are only guaranteed to run while the component is mounted in the page.
+   */
+  onChildrenChange(cb: (children: Array<Element | Text>) => void): void {
+    this.childrenChangeCallbacks.push(cb);
+  }
+
+  /**
+   * Registers a callback that will be invoked once the Web Component is initialized and
+   * all it's initial children are accounted for.
+   *
+   * These callbacks are only guaranteed to run while the component is mounted in the page.
+   */
+  onReady(cb: () => any) {
+    this.readyCallbacks.push(cb);
+  }
+
+  /**
+   * Registers a callback that will be invoked every time any of it's dependencies changes.
+   * Only the attributes can be dependencies by default, but through the `registerDependencyHandler()`
+   * other dependencies can be added.
+   *
+   * These callbacks are only guaranteed to run while the component is mounted in the page.
+   */
+  onChange(deps: Dependency[], cb: () => void | (() => void)): void {
+    let willRunOnNextMicroevent = false;
+
+    for (const dep of deps) {
+      const depHandler = getDependencyHandler(dep);
+
+      const unbind = depHandler.onChange(dep, () => {
+        if (willRunOnNextMicroevent) {
+          return;
+        }
+
+        willRunOnNextMicroevent = true;
+        queueMicrotask(() => {
+          willRunOnNextMicroevent = false;
+          cb();
+        });
+      });
+
+      this.cleanups.once(unbind);
+    }
+  }
+
+  /**
+   * Adds a cleanup function that will be called when the element is
+   * disconnected from the document.
+   */
+  cleanup(cb: () => void, opts?: {
+    /** By default a cleanup will be only ever called once on the next element `disconnect` event. Set this to true to keep it forever and run it on every `disconnect`. Usually this is not needed as every `connect` event would add a new cleanup. */
+    keep?: true;
+  }): void {
+    if (opts?.keep) {
+      this.cleanups.add(cb);
+      return;
+    }
+    this.cleanups.once(cb);
   }
 }
 

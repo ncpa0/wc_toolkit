@@ -2,7 +2,7 @@ import type { Attribute } from "./attribute";
 import { AttributeController } from "./attribute";
 import { CleanupController } from "./cleanup_controller";
 import { FunctionAttributeParser } from "./function-parser";
-import { ConnectedCallbackApi } from "./main_fn_api";
+import type { ConnectedCallbackApi } from "./main_fn_api";
 import { MethodsApi } from "./methods_api";
 import {
   AttributeAccessors,
@@ -110,10 +110,7 @@ const ELEMENT_OWN_NAMES = new Set([
   "root",
   "attributeController",
   "cleanups",
-  "_context",
-  "_methodsApi",
-  "_methods",
-  "_mainFuncApi",
+  "_api",
   "childrenContainer",
   "_childrenContainer",
   "_portalMirrors",
@@ -287,20 +284,25 @@ export function customElement(tagName: string, options?: CustomElementOptions) {
                         return root;
                       };
 
+                      // definition-time slot indexes for the attribute
+                      // controller's listener arrays: attribute change
+                      // listeners are stored in arrays addressed by these
+                      // indexes instead of per-name maps
+                      const attrListenerNameIndexes = new Map<string, number>();
+                      for (const attr of attributeTable) {
+                        attrListenerNameIndexes.set(attr.htmlName, attr.index);
+                      }
+                      let nextListenerIndex = attributeTable.length;
+                      for (const event of eventsTable) {
+                        if (!event.isBrowserEvent) {
+                          attrListenerNameIndexes.set(event.accessorKey, nextListenerIndex++);
+                        }
+                      }
+
                       const MUTATION_INIT: MutationObserverInit = {
                         childList: true,
                         characterData: true,
                         subtree: observeSubtree,
-                      };
-
-                      const initiateMethods = (methodsApi: MethodsApi<Attr, Evnts, Ctx>) => {
-                        const methods = getMethods(methodsApi);
-                        for (const key in methods) {
-                          const method = methods[key]!;
-                          // @ts-expect-error
-                          methods[key] = method.bind(methods);
-                        }
-                        return methods;
                       };
 
                       let methodStateCount = 0;
@@ -335,31 +337,23 @@ export function customElement(tagName: string, options?: CustomElementOptions) {
                         }
                         private readonly root: HTMLElement | ShadowRoot = getRoot(this);
 
-                        private readonly attributeController = new AttributeController(this);
+                        private readonly attributeController = new AttributeController(
+                          this,
+                          attrListenerNameIndexes,
+                        );
                         private readonly cleanups = new CleanupController();
-                        private readonly _context = getContext(
-                          this.attributeController.getAttributesApi(attributes, attributeOptions),
-                        );
-                        private readonly _methodsApi = new MethodsApi(
+                        private readonly _api: MethodsApi<Attr, Evnts, Ctx, Methods> = new MethodsApi(
                           this,
                           this.cleanups,
-                          this._context,
                           this.attributeController,
                           this.root,
                           eventRecords,
                           attributes,
-                        );
-                        private readonly _methods = initiateMethods(this._methodsApi);
-                        private readonly _mainFuncApi = new ConnectedCallbackApi(
-                          this,
-                          this.cleanups,
-                          this.attributeController,
-                          this._context,
-                          this._methods,
-                          this.root,
+                          getContext(
+                            this.attributeController.getAttributesApi(attributes, attributeOptions),
+                          ),
                           () => this.childrenContainer,
-                          eventRecords,
-                          attributes,
+                          getMethods,
                         );
 
                         public isMounted = false;
@@ -379,7 +373,7 @@ export function customElement(tagName: string, options?: CustomElementOptions) {
                           });
 
                           const state = this[INSTANCE_STATE];
-                          const boundMethods = this._methods as Record<string, (...args: any[]) => any>;
+                          const boundMethods = this._api.method as Record<string, (...args: any[]) => any>;
                           state.boundMethods = boundMethods;
 
                           // method accessors are defined on the prototype once
@@ -555,7 +549,7 @@ export function customElement(tagName: string, options?: CustomElementOptions) {
                             this._cloneChildrenIntoPortal();
                           }
 
-                          const cleanup = onConnectedCallback(this._mainFuncApi);
+                          const cleanup = onConnectedCallback(this._api);
                           if (cleanup) {
                             this.cleanups.once(cleanup);
                           }
@@ -570,7 +564,7 @@ export function customElement(tagName: string, options?: CustomElementOptions) {
                                   this._cloneChildrenIntoPortal();
                                 }
                               }
-                              this._mainFuncApi["mutationObservedCallback"](mutationRecords);
+                              this._api["mutationObservedCallback"](mutationRecords);
                             });
                           }
                           this.mutationObserver!.observe(this, MUTATION_INIT);
@@ -578,8 +572,8 @@ export function customElement(tagName: string, options?: CustomElementOptions) {
                             this.mutationObserver!.disconnect();
                           });
                           setTimeout(() => {
-                            this._mainFuncApi["triggerChildrenChange"](true);
-                            this._mainFuncApi["triggerReadyCallbacks"]();
+                            this._api["triggerChildrenChange"](true);
+                            this._api["triggerReadyCallbacks"]();
                           });
                         }
 

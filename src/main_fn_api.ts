@@ -1,15 +1,6 @@
-import { Attribute, AttributeController } from "./attribute";
-import { CleanupController } from "./cleanup_controller";
+import { Attribute } from "./attribute";
 import { AttributesDefinitions, EventsDefinitions, MethodsDefinitions } from "./custom_element";
-import { MethodsApi } from "./methods_api";
-import { nodeHasClassName, nofail } from "./utils";
-
-const everyNodeHasClassName = (nodes: NodeList, className: string) => {
-  for (const n of nodes) {
-    if (!nodeHasClassName(n, className)) return false;
-  }
-  return true;
-};
+import type { MethodsApi } from "./methods_api";
 
 declare global {
   interface WcToolkitDependencies {
@@ -33,163 +24,35 @@ const ATTR_DEP_HANDLER = class {
   }
 };
 
-export class ConnectedCallbackApi<
+// the dependency handlers are global, not per instance
+const dependencyHandlers: Array<DependencyHandler<any>> = [ATTR_DEP_HANDLER];
+
+export function addDependencyHandler(handler: DependencyHandler<any>) {
+  dependencyHandlers.push(handler);
+}
+
+export function getDependencyHandler(v: unknown): DependencyHandler<any> {
+  for (const handler of dependencyHandlers) {
+    if (handler.detect(v)) {
+      return handler;
+    }
+  }
+  throw new Error(
+    "Invalid dependency, make sure the dependency is of supported type or add a new dependency handler",
+  );
+}
+
+export function registerDependencyHandler<T>(handler: DependencyHandler<T>) {
+  addDependencyHandler(handler);
+}
+
+/**
+ * The api object given to the connected callback — the same flat
+ * per-instance api object that is given to `getMethods`.
+ */
+export type ConnectedCallbackApi<
   Attr extends AttributesDefinitions,
   Evnts extends EventsDefinitions,
   Ctx extends object,
   Methods extends MethodsDefinitions,
-> extends MethodsApi<Attr, Evnts, Ctx> {
-  private static dependencyHandlers: Array<DependencyHandler<any>> = [ATTR_DEP_HANDLER];
-
-  static addDependencyHandler(handler: DependencyHandler<any>) {
-    this.dependencyHandlers.push(handler);
-  }
-
-  private readonly childrenChangeCallbacks: Array<(children: Array<Element | Text>) => void> = [];
-  private readonly readyCallbacks: Array<() => any> = [];
-
-  constructor(
-    thisElement: HTMLElement,
-    cleanups: CleanupController,
-    attributeController: AttributeController,
-    public readonly context: Ctx,
-    public readonly method: Methods,
-    root: HTMLElement | ShadowRoot,
-    private readonly getChildrenPortal: () => HTMLDivElement,
-    protected readonly eventsRecord: Evnts,
-    attributes: Attr,
-  ) {
-    super(thisElement, cleanups, context, attributeController, root, eventsRecord, attributes);
-    cleanups.add(() => {
-      this.childrenChangeCallbacks.splice(0, this.childrenChangeCallbacks.length);
-      this.readyCallbacks.splice(0, this.readyCallbacks.length);
-    });
-  }
-
-  get childrenPortal(): HTMLDivElement {
-    return this.getChildrenPortal();
-  }
-
-  private getHandler(v: unknown): DependencyHandler<any> {
-    for (const handler of ConnectedCallbackApi.dependencyHandlers) {
-      if (handler.detect(v)) {
-        return handler;
-      }
-    }
-    throw new Error(
-      "Invalid dependency, make sure the dependency is of supported type or add a new dependency handler",
-    );
-  }
-
-  private isMutCbQueued = false;
-  protected mutationObservedCallback(mutationRecords: MutationRecord[]) {
-    if (this.isMutCbQueued) {
-      return;
-    }
-
-    if (
-      mutationRecords.every(mut =>
-        mut.type !== "characterData"
-        && everyNodeHasClassName(mut.addedNodes, "_wc_toolkit_content_container")
-        && everyNodeHasClassName(mut.removedNodes, "_wc_toolkit_content_container")
-      )
-    ) {
-      return;
-    }
-
-    this.isMutCbQueued = true;
-    setTimeout(() => {
-      this.isMutCbQueued = false;
-      this.triggerChildrenChange();
-    });
-  }
-
-  protected triggerReadyCallbacks() {
-    for (let cb = this.readyCallbacks.shift(); cb != null; cb = this.readyCallbacks.shift()) {
-      nofail(cb);
-    }
-  }
-
-  protected triggerChildrenChange(skipIfZero = false) {
-    const children = this.getChildren();
-    if (skipIfZero && children.length === 0) {
-      return;
-    }
-    for (const cb of this.childrenChangeCallbacks) {
-      try {
-        cb(children);
-      } catch (err) {
-        console.error(err);
-      }
-    }
-  }
-
-  /**
-   * Registers a callback that will be invoked whenever a direct children of
-   * this Web Component is changed, added or removed. This only includes childrens
-   * passed to it from outside, and doesn't include children added by this web component.
-   *
-   * These callbacks are only guaranteed to run while the component is mounted in the page.
-   */
-  onChildrenChange(cb: (children: Array<Element | Text>) => void): void {
-    this.childrenChangeCallbacks.push(cb);
-  }
-
-  /**
-   * Registers a callback that will be invoked once the Web Component is initialized and
-   * all it's initial children are accounted for.
-   *
-   * These callbacks are only guaranteed to run while the component is mounted in the page.
-   */
-  onReady(cb: () => any) {
-    this.readyCallbacks.push(cb);
-  }
-
-  /**
-   * Registers a callback that will be invoked every time any of it's dependencies changes.
-   * Only the attributes can be dependencies by default, but through the `registerDependencyHandler()`
-   * other dependencies can be added.
-   *
-   * These callbacks are only guaranteed to run while the component is mounted in the page.
-   */
-  onChange(deps: Dependency[], cb: () => void | (() => void)): void {
-    let willRunOnNextMicroevent = false;
-
-    for (const dep of deps) {
-      const depHandler = this.getHandler(dep);
-
-      const unbind = depHandler.onChange(dep, () => {
-        if (willRunOnNextMicroevent) {
-          return;
-        }
-
-        willRunOnNextMicroevent = true;
-        queueMicrotask(() => {
-          willRunOnNextMicroevent = false;
-          cb();
-        });
-      });
-
-      this.cleanups.once(unbind);
-    }
-  }
-
-  /**
-   * Adds a cleanup function that will be called when the element is
-   * disconnected from the document.
-   */
-  cleanup(cb: () => void, opts?: {
-    /** By default a cleanup will be only ever called once on the next element `disconnect` event. Set this to true to keep it forever and run it on every `disconnect`. Usually this is not needed as every `connect` event would add a new cleanup. */
-    keep?: true;
-  }): void {
-    if (opts?.keep) {
-      this.cleanups.add(cb);
-      return;
-    }
-    this.cleanups.once(cb);
-  }
-}
-
-export function registerDependencyHandler<T>(handler: DependencyHandler<T>) {
-  ConnectedCallbackApi.addDependencyHandler(handler);
-}
+> = MethodsApi<Attr, Evnts, Ctx, Methods>;

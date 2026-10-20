@@ -245,27 +245,90 @@ describe("parity lock", () => {
   });
 
   describe("AttributeController change-event shape", () => {
-    it("dispatches a CustomEvent with the attribute change detail", () => {
+    const jsonParser = {
+      fromString: (attr: string | null): { v: string } | null =>
+        attr == null ? null : JSON.parse(attr),
+      intoString: (attr: { v: string } | null): string | null =>
+        attr == null ? null : JSON.stringify(attr),
+    };
+
+    it("listeners receive the freshly parsed attribute value, not an event", () => {
       const elem = document.createElement("div");
       const controller = new AttributeController(elem);
+      // a registered proxy means dispatches re-parse the raw value
+      Attribute.new(controller, jsonParser, "foo");
 
-      const received: CustomEvent<any>[] = [];
-      controller.addEventListener("foo", ev => {
-        received.push(ev);
+      const received: unknown[] = [];
+      controller.addEventListener("foo", value => {
+        received.push(value);
       });
+
+      // the dispatch re-parses the attribute currently set on the element
+      elem.setAttribute("foo", '{"v":"a"}');
+      controller.attributeChangedCallback("foo", null, '{"v":"a"}');
+      expect(received).toEqual([{ v: "a" }]);
+      expect(received[0]).not.toBeInstanceOf(Event);
+
+      // the value was parsed fresh from the raw string on this dispatch...
+      const first = received[0];
+      elem.setAttribute("foo", '{"v":"b"}');
+      controller.attributeChangedCallback("foo", '{"v":"a"}', '{"v":"b"}');
+      expect(received[1]).toEqual({ v: "b" });
+      // ...and parsing back to the same content yields a new object, so
+      // every dispatch re-parses instead of reusing a stale memo
+      elem.setAttribute("foo", '{"v":"a"}');
+      controller.attributeChangedCallback("foo", '{"v":"b"}', '{"v":"a"}');
+      expect(received[2]).toEqual({ v: "a" });
+      expect(received[2]).not.toBe(first);
+    });
+
+    it("passes the raw attribute string when no proxy is registered for the name", () => {
+      const controller = new AttributeController(document.createElement("div"));
+
+      const received: unknown[] = [];
+      controller.addEventListener("bar", value => {
+        received.push(value);
+      });
+
+      controller.attributeChangedCallback("bar", "a", "b");
+      expect(received).toEqual(["b"]);
+    });
+
+    it("does not invoke listeners when oldValue === newValue", () => {
+      const controller = new AttributeController(document.createElement("div"));
+
+      const calls = vi.fn();
+      controller.addEventListener("foo", calls);
+
+      controller.attributeChangedCallback("foo", "a", "a");
+      expect(calls).not.toHaveBeenCalled();
 
       controller.attributeChangedCallback("foo", "a", "b");
-      expect(received).toHaveLength(1);
-      expect(received[0]!).toBeInstanceOf(CustomEvent);
-      expect(received[0]!.detail).toEqual({
-        attributeName: "foo",
-        previousValue: "a",
-        newValue: "b",
-      });
+      expect(calls).toHaveBeenCalledTimes(1);
+    });
 
-      // no dispatch when the value did not change
-      controller.attributeChangedCallback("foo", "b", "b");
-      expect(received).toHaveLength(1);
+    it("removes listeners registered with the once option after their first invocation", () => {
+      const controller = new AttributeController(document.createElement("div"));
+
+      const onceCalls = vi.fn();
+      controller.addEventListener("foo", onceCalls, { once: true });
+
+      controller.attributeChangedCallback("foo", "a", "b");
+      expect(onceCalls).toHaveBeenCalledTimes(1);
+
+      controller.attributeChangedCallback("foo", "b", "c");
+      expect(onceCalls).toHaveBeenCalledTimes(1);
+    });
+
+    it("treats a `true` options argument as a plain registration", () => {
+      const controller = new AttributeController(document.createElement("div"));
+
+      const calls = vi.fn();
+      controller.addEventListener("foo", calls, true);
+
+      controller.attributeChangedCallback("foo", "a", "b");
+      controller.attributeChangedCallback("foo", "b", "c");
+      expect(calls).toHaveBeenCalledTimes(2);
     });
 
     it("dispatches to listeners registered with options and to plain listeners for the same name", () => {
@@ -806,6 +869,44 @@ describe("parity lock", () => {
 
       const spread = { ...(elem as any) } as Record<symbol, unknown>;
       expect(Object.prototype.hasOwnProperty.call(spread, stateSymbol!)).toBe(false);
+    });
+  });
+
+  describe("direct-callback attribute dispatch (plan G3 lock)", () => {
+    it("element-level onChange receives the parsed value, not an event; consecutive identical values don't re-fire", () => {
+      const received: unknown[] = [];
+
+      const { CustomElement } = customElement("g3-elem-1")
+        .attributes({ num: "number", active: "boolean" })
+        .events()
+        .context()
+        .methods()
+        .connected(api => {
+          api.attribute.num.onChange(value => {
+            received.push(value);
+          });
+          api.attribute.active.onChange(value => {
+            received.push(value);
+          });
+        })
+        .register();
+
+      const elem = document.createElement("g3-elem-1") as any as InstanceType<typeof CustomElement>;
+      document.body.appendChild(elem);
+
+      elem.num = 5;
+      expect(received).toEqual([5]);
+      expect(received[0]).not.toBeInstanceOf(Event);
+
+      // setting the same raw value again doesn't reach the listeners
+      elem.setAttribute("num", "5");
+      expect(received).toEqual([5]);
+
+      // different raw values parsing to the same value don't re-fire either
+      elem.setAttribute("active", "");
+      expect(received).toEqual([5, true]);
+      elem.setAttribute("active", "1");
+      expect(received).toEqual([5, true]);
     });
   });
 });

@@ -2,7 +2,17 @@ import { AttributeOptionsMap, AttributesDefinitions, AttrOptions, LiteralType } 
 import { AttributeApi, TypeForLiteral } from "./type.utils";
 import { ListSerializer, toAttributeName } from "./utils";
 
-export type AttrChangeEvDetail = { attributeName: string; previousValue: string; newValue: string };
+/**
+ * Attribute change listener invoked directly with the attribute value —
+ * the freshly parsed value from the attribute proxy, or the raw attribute
+ * string when no proxy is registered for the name.
+ */
+export type AttrChangeListener = (value: any) => void;
+
+type AttrListenerEntry = {
+  listener: AttrChangeListener;
+  once: boolean;
+};
 
 const NEVER_CALLED = Symbol("CALLBACK_NEVER_CALLED");
 
@@ -155,8 +165,7 @@ export class Attribute<K extends string, T> {
 
   onChange(cb: (value: T | null) => void): () => void {
     let lastValue: T | null | typeof NEVER_CALLED = NEVER_CALLED;
-    const listenerHandler = (_: CustomEvent<AttrChangeEvDetail>) => {
-      const value = this.get();
+    const listenerHandler = (value: T | null) => {
       if (value === lastValue) return;
       lastValue = value;
       cb(value);
@@ -171,11 +180,9 @@ export class Attribute<K extends string, T> {
 }
 
 export class AttributeController {
-  private readonly emitter = new EventTarget();
   private readonly attrProxies = new Map<string, Attribute<string, any>>();
   private attributesApiCache: Record<string, Attribute<string, any>> | null = null;
-  private readonly listenersByAttr = new Map<string, Set<unknown>>();
-  private readonly alwaysDispatch = new Set<string>();
+  private readonly listenersByAttr = new Map<string, Array<AttrListenerEntry>>();
 
   constructor(
     public readonly element: HTMLElement,
@@ -223,21 +230,25 @@ export class AttributeController {
   ) {
     if (oldValue === newValue) return;
 
-    this.getProxy(name)?.["clearMemo"]();
-    // names registered with options can't be modeled by the listener
-    // sets (capture variants), so they always dispatch
-    if (!this.alwaysDispatch.has(name) && (this.listenersByAttr.get(name)?.size ?? 0) === 0) {
+    const proxy = this.getProxy(name);
+    proxy?.["clearMemo"]();
+
+    const listeners = this.listenersByAttr.get(name);
+    if (listeners === undefined || listeners.length === 0) {
       return;
     }
-    this.emitter.dispatchEvent(
-      new CustomEvent<AttrChangeEvDetail>(name, {
-        detail: {
-          attributeName: name,
-          previousValue: oldValue,
-          newValue,
-        },
-      }),
-    );
+
+    const value = proxy !== undefined ? proxy.get() : newValue;
+
+    // iterate a snapshot, listeners may unsubscribe during dispatch;
+    // `once` entries are dropped before their invocation
+    const snapshot = listeners.slice();
+    for (const entry of snapshot) {
+      if (entry.once) {
+        this.removeEventListener(name, entry.listener);
+      }
+      entry.listener(value);
+    }
   }
 
   has(attributeName: string) {
@@ -260,27 +271,39 @@ export class AttributeController {
 
   addEventListener(
     attributeName: string,
-    listener: (ev: CustomEvent<AttrChangeEvDetail>) => void,
+    listener: AttrChangeListener,
     options?: boolean | AddEventListenerOptions,
   ) {
-    if (options != null) {
-      this.alwaysDispatch.add(attributeName);
-    } else {
-      let set = this.listenersByAttr.get(attributeName);
-      if (!set) {
-        set = new Set();
-        this.listenersByAttr.set(attributeName, set);
-      }
-      set.add(listener);
+    // capture / bubble carry no meaning without a dispatch hierarchy and
+    // `signal` was never honored here; only `once` has an effect
+    const once = typeof options === "object" && options.once === true;
+
+    let listeners = this.listenersByAttr.get(attributeName);
+    if (listeners === undefined) {
+      listeners = [];
+      this.listenersByAttr.set(attributeName, listeners);
     }
-    this.emitter.addEventListener(attributeName, listener as any, options);
+
+    // an identical listener only ever gets one entry
+    for (const entry of listeners) {
+      if (entry.listener === listener) return;
+    }
+
+    listeners.push({ listener, once });
   }
 
   removeEventListener(
     attributeName: string,
-    listener: (ev: CustomEvent<AttrChangeEvDetail>) => void,
+    listener: AttrChangeListener,
   ) {
-    this.listenersByAttr.get(attributeName)?.delete(listener);
-    this.emitter.removeEventListener(attributeName, listener as any);
+    const listeners = this.listenersByAttr.get(attributeName);
+    if (listeners === undefined) return;
+
+    for (let i = 0; i < listeners.length; i++) {
+      if (listeners[i]!.listener === listener) {
+        listeners.splice(i, 1);
+        return;
+      }
+    }
   }
 }

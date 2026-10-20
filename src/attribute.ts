@@ -297,10 +297,9 @@ export class AttributeController {
 
     // iterate a snapshot; membership is re-checked before each invocation
     // so a listener removed by an earlier listener in the same dispatch is
-    // skipped (the removed-listener semantics of the old EventTarget
-    // emitter), and the value is re-read per invocation so listeners
-    // observe writes made mid-dispatch (`get()` is a memo hit after the
-    // first read); `once` entries are still dropped before their invocation
+    // skipped (matching EventTarget), and the value is re-read per
+    // invocation so listeners observe writes made mid-dispatch — a `get()`
+    // after the first is a memo hit
     const snapshot = listeners.slice();
     for (const entry of snapshot) {
       if (!listeners.some(current => current.listener === entry.listener)) continue;

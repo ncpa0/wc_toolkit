@@ -47,7 +47,6 @@ describe("parity lock", () => {
 
       const elem = document.createElement("parity-elem-1") as any as InstanceType<typeof CustomElement>;
 
-      // the descriptor lives on the prototype, there is no own property
       const descriptor = Object.getOwnPropertyDescriptor(elem, "doThing");
       expect(descriptor).toBeUndefined();
       const protoDescriptor = Object.getOwnPropertyDescriptor(
@@ -102,7 +101,6 @@ describe("parity lock", () => {
       expect(typeof protoDescriptor!.get).toBe("function");
       expect(typeof protoDescriptor!.set).toBe("function");
 
-      // get/set semantics still work
       expect(elem.foo).toBeNull();
       elem.foo = "x";
       expect(elem.getAttribute("foo")).toBe("x");
@@ -712,7 +710,6 @@ describe("parity lock", () => {
       expect(children[1]!.nodeType).toBe(Node.ELEMENT_NODE);
       expect(children[2]!.nodeType).toBe(Node.TEXT_NODE);
 
-      // fresh array per call
       const again = elem.getKids();
       expect(again).not.toBe(children);
       expect(again[0]).toBe(text1);
@@ -779,7 +776,6 @@ describe("parity lock", () => {
 
       const elem = document.createElement("g2-elem-1") as any as InstanceType<typeof CustomElement>;
 
-      // accessors live on the prototype but are visible via `in`
       expect("foo" in elem).toBe(true);
       expect("oncustomevent" in elem).toBe(true);
       expect("doThing" in elem).toBe(true);
@@ -1074,13 +1070,10 @@ describe("parity lock", () => {
 
       const elem = document.createElement("g6-elem-1") as any as InstanceType<typeof CustomElement>;
 
-      // the root div is not allocated until first use
       expect((elem as any)._root).toBeNull();
 
       elem.attachNow("early");
 
-      // attach allocated the root div, but it stays detached: the content
-      // ends up there and never reaches the element
       const root = (elem as any)._root;
       expect(root).toBeInstanceOf(HTMLDivElement);
       expect(root.className).toBe("_wc_toolkit_content_container");
@@ -1092,7 +1085,6 @@ describe("parity lock", () => {
 
       document.body.appendChild(elem);
 
-      // connecting a noContent element does not append the root either
       expect(elem.textContent).toBe("");
       expect(elem.getKids()).toEqual([]);
       expect(elem.querySelector("._wc_toolkit_content_container")).toBeNull();
@@ -1180,7 +1172,6 @@ describe("parity lock", () => {
           "Property '_root' already exists on the HTMLElement, cannot assign attribute accessor. [g6-elem-5]",
         );
 
-        // the accessor must not exist; the internal field keeps working
         expect(Object.getOwnPropertyDescriptor(elem, "_root")!.get).toBeUndefined();
         expect(Object.getOwnPropertyDescriptor(elem, "_root")!.value).toBeInstanceOf(HTMLDivElement);
 

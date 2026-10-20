@@ -32,6 +32,7 @@
   "scripts": {
     "test:tsc": "tsc --noEmit",
     "test:unit": "vitest run",
+    "bench": "node ./bench/bench.mjs",
     "prepare": "husky install",
     "build": "node ./scripts/build.mjs",
     "fix:lint": "oxlint --fix ./src",

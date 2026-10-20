@@ -118,7 +118,6 @@ export function customElement(tagName: string, options?: CustomElementOptions) {
          * to element instances that can be manipulated in JavaScript.
          */
         events<const Evnts extends EventsDefinitions = {}>(eventRecords: Evnts = ({} as any)) {
-          const events = Object.entries(eventRecords).map(([e, constructor]) => e);
           return {
             /**
              * Context can be used to store the internal state of the custom element. `getContext` param should
@@ -149,17 +148,35 @@ export function customElement(tagName: string, options?: CustomElementOptions) {
                         api: ConnectedCallbackApi<Attr, Evnts, Ctx, Methods>,
                       ) => void | (() => void),
                     ) {
-                      const observedAttributes = Object.keys(attributes).flatMap(attr => {
-                        const options = attributeOptions?.[attr];
-                        if (options?.observe === false) return [];
-                        return options?.htmlName ?? toAttributeName(attr);
+                      // definition-time precomputation: everything below is
+                      // derived once per definition instead of per instance
+                      const attributeTable = Object.keys(attributes).map((key, index) => {
+                        const options = attributeOptions?.[key];
+                        return {
+                          key,
+                          index,
+                          htmlName: options?.htmlName ?? toAttributeName(key),
+                          observed: options?.observe !== false,
+                        };
                       });
 
-                      for (let eventType of events) {
-                        eventType = eventType.toLowerCase();
+                      const observedAttributes: string[] = [];
+                      for (const attr of attributeTable) {
+                        if (attr.observed) {
+                          observedAttributes.push(attr.htmlName);
+                        }
+                      }
+
+                      const eventsTable = Object.keys(eventRecords).map(eventType => {
+                        const lowercaseType = eventType.toLowerCase();
                         // only custom events need additional handling
-                        if (!ALL_BROWSER_EVENTS_SET.has(eventType)) {
-                          observedAttributes.push(`on${eventType}`);
+                        const isBrowserEvent = ALL_BROWSER_EVENTS_SET.has(lowercaseType);
+                        return { eventType, accessorKey: `on${lowercaseType}`, isBrowserEvent };
+                      });
+
+                      for (const event of eventsTable) {
+                        if (!event.isBrowserEvent) {
+                          observedAttributes.push(event.accessorKey);
                         }
                       }
 
@@ -253,10 +270,8 @@ export function customElement(tagName: string, options?: CustomElementOptions) {
                             });
                           }
 
-                          for (const key in attributes) {
-                            // match Object.entries semantics: only own enumerable keys
-                            if (!Object.prototype.hasOwnProperty.call(attributes, key)) continue;
-                            const value = attributes[key]!;
+                          for (const attr of attributeTable) {
+                            const key = attr.key;
                             if (key in this) {
                               console.warn(
                                 `Property '${key}' already exists on the HTMLElement, cannot assign attribute accessor. [${tagName}]`,
@@ -264,7 +279,11 @@ export function customElement(tagName: string, options?: CustomElementOptions) {
                               continue;
                             }
 
-                            const attrProxy = this.attributeController.getOrCreateProxy(key, value, attributeOptions);
+                            const attrProxy = this.attributeController.getOrCreateProxy(
+                              key,
+                              attributes[key]!,
+                              attributeOptions,
+                            );
                             Object.defineProperty(this, key, {
                               enumerable: false,
                               configurable: false,
@@ -277,15 +296,13 @@ export function customElement(tagName: string, options?: CustomElementOptions) {
                             });
                           }
 
-                          for (const eventType of events) {
-                            const lowercaseType = eventType.toLowerCase();
-                            const accessorKey = `on${lowercaseType}`;
-
+                          for (const event of eventsTable) {
                             // only custom events need additional handling
-                            if (ALL_BROWSER_EVENTS_SET.has(lowercaseType)) {
+                            if (event.isBrowserEvent) {
                               continue;
                             }
 
+                            const accessorKey = event.accessorKey;
                             const attrProxy = this.attributeController.getOrCreateProxy(
                               accessorKey,
                               FunctionAttributeParser,
@@ -294,7 +311,7 @@ export function customElement(tagName: string, options?: CustomElementOptions) {
 
                             let attributeHandlerOverride: ((event: Event) => void) | null = null;
                             let attributeHandler: ((event: Event) => void) | null = null;
-                            this.addEventListener(eventType, (event) => {
+                            this.addEventListener(event.eventType, (event) => {
                               if (attributeHandlerOverride) {
                                 return attributeHandlerOverride(event);
                               }
@@ -328,7 +345,7 @@ export function customElement(tagName: string, options?: CustomElementOptions) {
                                 }
 
                                 if (typeof value !== "function") {
-                                  throw new TypeError(`'on${lowercaseType}' must be a Function`);
+                                  throw new TypeError(`'on${event.accessorKey.slice(2)}' must be a Function`);
                                 }
 
                                 attributeHandlerOverride = value;

@@ -34,7 +34,7 @@ describe("parity lock", () => {
   });
 
   describe("method property descriptors", () => {
-    it("methods are own, non-enumerable, non-configurable, non-writable properties", () => {
+    it("methods are prototype get-only accessors returning a lazily-cached bound function", () => {
       const { CustomElement } = customElement("parity-elem-1")
         .attributes()
         .events()
@@ -47,23 +47,39 @@ describe("parity lock", () => {
 
       const elem = document.createElement("parity-elem-1") as any as InstanceType<typeof CustomElement>;
 
+      // the descriptor lives on the prototype, there is no own property
       const descriptor = Object.getOwnPropertyDescriptor(elem, "doThing");
-      expect(descriptor).toBeDefined();
-      expect(descriptor!.enumerable).toBe(false);
-      expect(descriptor!.configurable).toBe(false);
-      expect(descriptor!.writable).toBe(false);
-      expect(typeof descriptor!.value).toBe("function");
-      expect(descriptor!.value!()).toBe(1);
+      expect(descriptor).toBeUndefined();
+      const protoDescriptor = Object.getOwnPropertyDescriptor(
+        Object.getPrototypeOf(elem),
+        "doThing",
+      );
+      expect(protoDescriptor).toBeDefined();
+      expect(protoDescriptor!.enumerable).toBe(false);
+      expect(protoDescriptor!.configurable).toBe(false);
+      expect(typeof protoDescriptor!.get).toBe("function");
+      expect(protoDescriptor!.set).toBeUndefined();
 
+      // repeated access returns the same lazily-cached bound function
+      const first = elem.doThing;
+      expect(typeof first).toBe("function");
+      expect(elem.doThing).toBe(first);
+      expect(first()).toBe(1);
+
+      // strict-mode assignment throws (accessor without a setter)
       expect(() => {
         (elem as any).doThing = () => 2;
       }).toThrow(TypeError);
+      expect(elem.doThing()).toBe(1);
+
+      // sloppy-mode assignment silently no-ops
+      new Function("elem", "elem.doThing = () => 2;")(elem);
       expect(elem.doThing()).toBe(1);
     });
   });
 
   describe("attribute accessor descriptors", () => {
-    it("attribute accessors are own, non-enumerable, non-configurable get/set properties", () => {
+    it("attribute accessors are prototype, non-enumerable, non-configurable get/set properties", () => {
       const { CustomElement } = customElement("parity-elem-2")
         .attributes({ foo: "string" })
         .events()
@@ -75,11 +91,22 @@ describe("parity lock", () => {
       const elem = document.createElement("parity-elem-2") as any as InstanceType<typeof CustomElement>;
 
       const descriptor = Object.getOwnPropertyDescriptor(elem, "foo");
-      expect(descriptor).toBeDefined();
-      expect(descriptor!.enumerable).toBe(false);
-      expect(descriptor!.configurable).toBe(false);
-      expect(typeof descriptor!.get).toBe("function");
-      expect(typeof descriptor!.set).toBe("function");
+      expect(descriptor).toBeUndefined();
+      const protoDescriptor = Object.getOwnPropertyDescriptor(
+        Object.getPrototypeOf(elem),
+        "foo",
+      );
+      expect(protoDescriptor).toBeDefined();
+      expect(protoDescriptor!.enumerable).toBe(false);
+      expect(protoDescriptor!.configurable).toBe(false);
+      expect(typeof protoDescriptor!.get).toBe("function");
+      expect(typeof protoDescriptor!.set).toBe("function");
+
+      // get/set semantics still work
+      expect(elem.foo).toBeNull();
+      elem.foo = "x";
+      expect(elem.getAttribute("foo")).toBe("x");
+      expect(elem.foo).toBe("x");
     });
   });
 
@@ -134,7 +161,7 @@ describe("parity lock", () => {
   });
 
   describe("collision warnings", () => {
-    it("warns for attribute key and event accessor collisions with the exact message, once per instance", () => {
+    it("warns for attribute key and event accessor collisions with the exact message, once per definition", () => {
       const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
       try {
@@ -148,8 +175,6 @@ describe("parity lock", () => {
 
         expect(CustomElement.observedAttributes).toEqual(["title", "oncompositionend"]);
 
-        document.createElement("parity-elem-4");
-
         expect(warnSpy).toHaveBeenCalledTimes(2);
         expect(warnSpy).toHaveBeenCalledWith(
           "Property 'title' already exists on the HTMLElement, cannot assign attribute accessor. [parity-elem-4]",
@@ -158,8 +183,10 @@ describe("parity lock", () => {
           "Property 'oncompositionend' already exists on the HTMLElement, cannot assign event callback accessor. [parity-elem-4]",
         );
 
+        // creating instances adds no further warns
         document.createElement("parity-elem-4");
-        expect(warnSpy).toHaveBeenCalledTimes(4);
+        document.createElement("parity-elem-4");
+        expect(warnSpy).toHaveBeenCalledTimes(2);
       } finally {
         warnSpy.mockRestore();
       }
@@ -579,6 +606,127 @@ describe("parity lock", () => {
       const elem = document.createElement("parity-elem-14") as any as InstanceType<typeof CustomElement>;
 
       expect(() => elem.emitUnknown()).toThrow(new Error("invalid error type: 'nope'"));
+    });
+  });
+
+  describe("prototype accessors (plan G2 lock)", () => {
+    it("'foo' in elem and elem.foo get/set/assignment semantics (sloppy + strict)", () => {
+      const { CustomElement } = customElement("g2-elem-1")
+        .attributes({ foo: "string" })
+        .events({ customevent: CustomEvent })
+        .context()
+        .methods(() => ({
+          doThing: () => 1,
+        }))
+        .connected(() => {})
+        .register();
+
+      const elem = document.createElement("g2-elem-1") as any as InstanceType<typeof CustomElement>;
+
+      // accessors live on the prototype but are visible via `in`
+      expect("foo" in elem).toBe(true);
+      expect("oncustomevent" in elem).toBe(true);
+      expect("doThing" in elem).toBe(true);
+
+      // attribute accessor get/set
+      expect(elem.foo).toBeNull();
+      elem.foo = "x";
+      expect(elem.getAttribute("foo")).toBe("x");
+      expect(elem.foo).toBe("x");
+
+      // event accessor: strict-mode non-function assignment throws the
+      // exact TypeError, function assignment works
+      expect(() => {
+        (elem as any).oncustomevent = "nope";
+      }).toThrow(new TypeError("'oncustomevent' must be a Function"));
+      const override = vi.fn();
+      elem.oncustomevent = override;
+      expect(elem.oncustomevent).toBe(override);
+
+      // method: strict-mode assignment throws, sloppy-mode silently no-ops
+      const doThing = elem.doThing;
+      expect(() => {
+        (elem as any).doThing = () => 2;
+      }).toThrow(TypeError);
+      expect(elem.doThing).toBe(doThing);
+      new Function("elem", "elem.doThing = () => 2;")(elem);
+      expect(elem.doThing).toBe(doThing);
+
+      // sloppy-mode event assignment works (accessor has a setter)
+      const sloppyFn = vi.fn();
+      new Function("elem", "fn", "elem.oncustomevent = fn;")(elem, sloppyFn);
+      expect(elem.oncustomevent).toBe(sloppyFn);
+    });
+
+    it("collision with a method name warns once per definition and the method keeps the name", () => {
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+      try {
+        const { CustomElement } = customElement("g2-elem-2")
+          .attributes({ foo: "string", title: "string" })
+          .events()
+          .context()
+          .methods(() => ({
+            foo: () => "method foo",
+          }))
+          .connected(() => {})
+          .register();
+
+        // "title" collides at definition time; "foo" is displaced by the
+        // method once the method keys become known on first construction
+        expect(warnSpy).toHaveBeenCalledTimes(1);
+        expect(warnSpy).toHaveBeenCalledWith(
+          "Property 'title' already exists on the HTMLElement, cannot assign attribute accessor. [g2-elem-2]",
+        );
+
+        const elem = document.createElement("g2-elem-2") as any as InstanceType<typeof CustomElement>;
+        expect(warnSpy).toHaveBeenCalledTimes(2);
+        expect(warnSpy).toHaveBeenCalledWith(
+          "Property 'foo' already exists on the HTMLElement, cannot assign attribute accessor. [g2-elem-2]",
+        );
+
+        // the method keeps the name, the attribute accessor is displaced
+        expect(elem.foo()).toBe("method foo");
+        expect(Object.getOwnPropertyDescriptor(Object.getPrototypeOf(elem), "foo")!.get).toBeDefined();
+
+        // further instances add no warns
+        document.createElement("g2-elem-2");
+        expect(warnSpy).toHaveBeenCalledTimes(2);
+      } finally {
+        warnSpy.mockRestore();
+      }
+    });
+
+    it("DOM output unchanged: attribute accessor change re-renders through the connected api", async () => {
+      const { CustomElement } = customElement("g2-elem-3")
+        .attributes({ label: "string" })
+        .events()
+        .context()
+        .methods()
+        .connected(api => {
+          const template = () => {
+            const div = document.createElement("div");
+            div.innerHTML = `<span>${api.attribute.label.get() ?? "not set"}</span>`;
+            return div;
+          };
+
+          api.replace(template());
+          api.onChange([api.attribute.label], () => {
+            api.replace(template());
+          });
+        })
+        .register();
+
+      const elem = document.createElement("g2-elem-3") as any as InstanceType<typeof CustomElement>;
+
+      document.body.appendChild(elem);
+      expect(elem.querySelector("span")!.textContent).toBe("not set");
+
+      elem.label = "hello";
+      await sleep(0);
+      expect(elem.getAttribute("label")).toBe("hello");
+      expect(elem.querySelector("span")!.textContent).toBe("hello");
+      expect(elem.querySelector("._wc_toolkit_content_container")).not.toBeNull();
     });
   });
 });

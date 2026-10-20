@@ -1,3 +1,4 @@
+import type { Attribute } from "./attribute";
 import { AttributeController } from "./attribute";
 import { CleanupController } from "./cleanup_controller";
 import { FunctionAttributeParser } from "./function-parser";
@@ -73,6 +74,53 @@ export type CustomElement<
     >
   >;
 };
+
+type ElementInstanceState = {
+  attrProxies: Array<Attribute<string, any> | undefined>;
+  eventProxies: Array<Attribute<string, any> | undefined>;
+  eventOverride: Array<((event: Event) => void) | null>;
+  eventHandler: Array<((event: Event) => void) | null>;
+  methodFns: Array<((...args: any[]) => any) | undefined>;
+  boundMethods: Record<string, (...args: any[]) => any> | null;
+};
+
+const INSTANCE_STATE = Symbol("wc_toolkit:instance_state");
+
+type InstanceStateCarrier = { [INSTANCE_STATE]: ElementInstanceState };
+
+/**
+ * Plain element used as the collision-check surface. The `in` operator must
+ * be evaluated against an element instance (not `HTMLElement.prototype`):
+ * browsers put the `on*` handlers on the prototype, happy-dom assigns them
+ * as own properties on every element.
+ */
+let collisionProbe: HTMLElement | null = null;
+
+/**
+ * Names that the element class itself puts on its instances; an attribute
+ * or event accessor key matching one of them cannot be defined.
+ */
+const ELEMENT_OWN_NAMES = new Set([
+  "isMounted",
+  "attributeNames",
+  "observedAttributes",
+  "NAME",
+  "root",
+  "attributeController",
+  "cleanups",
+  "_context",
+  "_methodsApi",
+  "_methods",
+  "_mainFuncApi",
+  "childrenContainer",
+  "_childrenContainer",
+  "_portalMirrors",
+  "mutationObserver",
+  "connectedCallback",
+  "disconnectedCallback",
+  "attributeChangedCallback",
+  "_cloneChildrenIntoPortal",
+]);
 
 export type AttrOptions = {
   /**
@@ -167,11 +215,13 @@ export function customElement(tagName: string, options?: CustomElementOptions) {
                         }
                       }
 
+                      let eventStateCount = 0;
                       const eventsTable = Object.keys(eventRecords).map(eventType => {
                         const lowercaseType = eventType.toLowerCase();
                         // only custom events need additional handling
                         const isBrowserEvent = ALL_BROWSER_EVENTS_SET.has(lowercaseType);
-                        return { eventType, accessorKey: `on${lowercaseType}`, isBrowserEvent };
+                        const stateIndex = isBrowserEvent ? -1 : eventStateCount++;
+                        return { eventType, accessorKey: `on${lowercaseType}`, isBrowserEvent, stateIndex };
                       });
 
                       for (const event of eventsTable) {
@@ -181,6 +231,36 @@ export function customElement(tagName: string, options?: CustomElementOptions) {
                       }
 
                       Object.freeze(observedAttributes);
+
+                      // collision checks run once per definition; colliding
+                      // attribute / event accessor keys get no accessor but
+                      // keep their attribute proxies for the attribute machinery
+                      const attributeKeySet = new Set(attributeTable.map(attr => attr.key));
+                      const eventAccessorKeySet = new Set(
+                        eventsTable.filter(event => !event.isBrowserEvent).map(event => event.accessorKey),
+                      );
+                      collisionProbe ??= document.createElement("div");
+                      const collidingAttributeKeys = new Set<string>();
+                      for (const attr of attributeTable) {
+                        const key = attr.key;
+                        if (key in collisionProbe || ELEMENT_OWN_NAMES.has(key)) {
+                          console.warn(
+                            `Property '${key}' already exists on the HTMLElement, cannot assign attribute accessor. [${tagName}]`,
+                          );
+                          collidingAttributeKeys.add(key);
+                        }
+                      }
+                      const collidingEventAccessorKeys = new Set<string>();
+                      for (const event of eventsTable) {
+                        if (event.isBrowserEvent) continue;
+                        const key = event.accessorKey;
+                        if (key in collisionProbe || ELEMENT_OWN_NAMES.has(key) || attributeKeySet.has(key)) {
+                          console.warn(
+                            `Property '${key}' already exists on the HTMLElement, cannot assign event callback accessor. [${tagName}]`,
+                          );
+                          collidingEventAccessorKeys.add(key);
+                        }
+                      }
 
                       const getRoot = (elem: HTMLElement) => {
                         let root: HTMLElement | ShadowRoot;
@@ -213,10 +293,25 @@ export function customElement(tagName: string, options?: CustomElementOptions) {
                         return methods;
                       };
 
+                      let methodStateCount = 0;
+                      const methodStateIndexes = new Map<string, number>();
+                      const methodOwnPropKeys = new Set<string>();
+
                       const elementConstructor = class WcToolkitCustomElement extends HTMLElement {
                         static readonly NAME = tagName;
                         static readonly observedAttributes = observedAttributes;
                         readonly attributeNames = observedAttributes;
+
+                        // must be initialized before any other field so it is
+                        // readable while the rest of the state is set up
+                        [INSTANCE_STATE]: ElementInstanceState = {
+                          attrProxies: [],
+                          eventProxies: [],
+                          eventOverride: [],
+                          eventHandler: [],
+                          methodFns: [],
+                          boundMethods: null,
+                        };
 
                         private _childrenContainer: HTMLDivElement | null = null;
                         private get childrenContainer(): HTMLDivElement {
@@ -261,39 +356,76 @@ export function customElement(tagName: string, options?: CustomElementOptions) {
                         constructor() {
                           super();
 
-                          for (const key in this._methods) {
-                            Object.defineProperty(this, key, {
-                              enumerable: false,
-                              configurable: false,
-                              writable: false,
-                              value: this._methods[key]!,
-                            });
-                          }
+                          const state = this[INSTANCE_STATE];
+                          const boundMethods = this._methods as Record<string, (...args: any[]) => any>;
+                          state.boundMethods = boundMethods;
 
-                          for (const attr of attributeTable) {
-                            const key = attr.key;
-                            if (key in this) {
-                              console.warn(
-                                `Property '${key}' already exists on the HTMLElement, cannot assign attribute accessor. [${tagName}]`,
-                              );
+                          // method accessors are defined on the prototype once
+                          // per definition, the first time the method keys are
+                          // known
+                          for (const key in boundMethods) {
+                            if (methodStateIndexes.has(key) || methodOwnPropKeys.has(key)) continue;
+
+                            if (
+                              key in HTMLElement.prototype || ELEMENT_OWN_NAMES.has(key)
+                              || attributeKeySet.has(key) || eventAccessorKeySet.has(key)
+                            ) {
+                              // the method keeps the name (methods were defined
+                              // first); the displaced attribute / event accessor
+                              // gets an own method property on every instance
+                              // instead and warns once
+                              methodOwnPropKeys.add(key);
+                              if (attributeKeySet.has(key) && !collidingAttributeKeys.has(key)) {
+                                console.warn(
+                                  `Property '${key}' already exists on the HTMLElement, cannot assign attribute accessor. [${tagName}]`,
+                                );
+                              }
+                              if (eventAccessorKeySet.has(key) && !collidingEventAccessorKeys.has(key)) {
+                                console.warn(
+                                  `Property '${key}' already exists on the HTMLElement, cannot assign event callback accessor. [${tagName}]`,
+                                );
+                              }
                               continue;
                             }
 
-                            const attrProxy = this.attributeController.getOrCreateProxy(
-                              key,
-                              attributes[key]!,
-                              attributeOptions,
-                            );
-                            Object.defineProperty(this, key, {
+                            const stateIndex = methodStateCount++;
+                            methodStateIndexes.set(key, stateIndex);
+                            Object.defineProperty(elementConstructor.prototype, key, {
                               enumerable: false,
                               configurable: false,
-                              get: () => {
-                                return attrProxy.get();
-                              },
-                              set: (value: any) => {
-                                attrProxy.set(value);
+                              get: function(this: InstanceStateCarrier) {
+                                const methodState = this[INSTANCE_STATE];
+                                const cached = methodState.methodFns[stateIndex];
+                                if (cached !== undefined) {
+                                  return cached;
+                                }
+                                const fn = methodState.boundMethods?.[key];
+                                methodState.methodFns[stateIndex] = fn;
+                                return fn;
                               },
                             });
+                          }
+
+                          if (methodOwnPropKeys.size > 0) {
+                            for (const key in boundMethods) {
+                              if (methodOwnPropKeys.has(key)) {
+                                Object.defineProperty(this, key, {
+                                  enumerable: false,
+                                  configurable: false,
+                                  writable: false,
+                                  value: boundMethods[key]!,
+                                });
+                              }
+                            }
+                          }
+
+                          const attrApi = this.attributeController.getAttributesApi(
+                            attributes,
+                            attributeOptions,
+                          ) as Record<string, Attribute<string, any>>;
+                          const attrProxies = state.attrProxies;
+                          for (const attr of attributeTable) {
+                            attrProxies[attr.index] = attrApi[attr.key];
                           }
 
                           for (const event of eventsTable) {
@@ -302,54 +434,28 @@ export function customElement(tagName: string, options?: CustomElementOptions) {
                               continue;
                             }
 
-                            const accessorKey = event.accessorKey;
+                            const stateIndex = event.stateIndex;
                             const attrProxy = this.attributeController.getOrCreateProxy(
-                              accessorKey,
+                              event.accessorKey,
                               FunctionAttributeParser,
                               attributeOptions,
                             );
+                            state.eventProxies[stateIndex] = attrProxy;
 
-                            let attributeHandlerOverride: ((event: Event) => void) | null = null;
-                            let attributeHandler: ((event: Event) => void) | null = null;
                             this.addEventListener(event.eventType, (event) => {
-                              if (attributeHandlerOverride) {
-                                return attributeHandlerOverride(event);
+                              const override = state.eventOverride[stateIndex];
+                              if (override) {
+                                return override(event);
                               }
 
-                              if (attributeHandler) {
-                                return attributeHandler(event);
+                              const handler = state.eventHandler[stateIndex];
+                              if (handler) {
+                                return handler(event);
                               }
                             });
 
                             attrProxy.onChange(() => {
-                              attributeHandler = attrProxy.get();
-                            });
-
-                            if (accessorKey in this) {
-                              console.warn(
-                                `Property '${accessorKey}' already exists on the HTMLElement, cannot assign event callback accessor. [${tagName}]`,
-                              );
-                              continue;
-                            }
-
-                            Object.defineProperty(this, accessorKey, {
-                              enumerable: false,
-                              configurable: false,
-                              get: () => {
-                                return attributeHandlerOverride ?? attrProxy.get();
-                              },
-                              set: (value: any) => {
-                                if (value == null) {
-                                  attributeHandlerOverride = null;
-                                  return;
-                                }
-
-                                if (typeof value !== "function") {
-                                  throw new TypeError(`'on${event.accessorKey.slice(2)}' must be a Function`);
-                                }
-
-                                attributeHandlerOverride = value;
-                              },
+                              state.eventHandler[stateIndex] = attrProxy.get();
                             });
                           }
                         }
@@ -471,6 +577,51 @@ export function customElement(tagName: string, options?: CustomElementOptions) {
                           this.attributeController.attributeChangedCallback(name, oldValue, newValue);
                         }
                       };
+
+                      // attribute accessors are defined once per definition on
+                      // the prototype; the shared closures read the per-instance
+                      // state stored under INSTANCE_STATE
+                      for (const attr of attributeTable) {
+                        if (collidingAttributeKeys.has(attr.key)) continue;
+                        const index = attr.index;
+                        Object.defineProperty(elementConstructor.prototype, attr.key, {
+                          enumerable: false,
+                          configurable: false,
+                          get: function(this: InstanceStateCarrier) {
+                            return this[INSTANCE_STATE].attrProxies[index]?.get();
+                          },
+                          set: function(this: InstanceStateCarrier, value: any) {
+                            this[INSTANCE_STATE].attrProxies[index]?.set(value);
+                          },
+                        });
+                      }
+
+                      for (const event of eventsTable) {
+                        if (event.isBrowserEvent || collidingEventAccessorKeys.has(event.accessorKey)) continue;
+                        const stateIndex = event.stateIndex;
+                        const lowercaseType = event.accessorKey.slice(2);
+                        Object.defineProperty(elementConstructor.prototype, event.accessorKey, {
+                          enumerable: false,
+                          configurable: false,
+                          get: function(this: InstanceStateCarrier) {
+                            const state = this[INSTANCE_STATE];
+                            return state.eventOverride[stateIndex] ?? state.eventProxies[stateIndex]?.get();
+                          },
+                          set: function(this: InstanceStateCarrier, value: any) {
+                            const state = this[INSTANCE_STATE];
+                            if (value == null) {
+                              state.eventOverride[stateIndex] = null;
+                              return;
+                            }
+
+                            if (typeof value !== "function") {
+                              throw new TypeError(`'on${lowercaseType}' must be a Function`);
+                            }
+
+                            state.eventOverride[stateIndex] = value;
+                          },
+                        });
+                      }
 
                       return {
                         CustomElement: elementConstructor as any as CustomElement<Attr, Evnts, Methods>,

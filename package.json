@@ -20,8 +20,9 @@
   },
   "files": [
     "dist",
+    "package.json",
     "LICENSE",
-    "package.json"
+    "README"
   ],
   "description": "",
   "license": "MIT",

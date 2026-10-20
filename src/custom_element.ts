@@ -337,7 +337,15 @@ export function customElement(tagName: string, options?: CustomElementOptions) {
                           }
                           return this._childrenContainer;
                         }
-                        private readonly root: HTMLElement | ShadowRoot = getRoot(this);
+
+                        // shadow roots must be observable on the host element
+                        // immediately after `createElement` (contract), so
+                        // shadow mode allocates here; the non-shadow content
+                        // container div is allocated on first use instead
+                        private _root: HTMLElement | ShadowRoot | null = shadowRoot ? getRoot(this) : null;
+                        private get root(): HTMLElement | ShadowRoot {
+                          return this._root ??= getRoot(this);
+                        }
 
                         private readonly attributeController = new AttributeController(
                           this,
@@ -348,7 +356,7 @@ export function customElement(tagName: string, options?: CustomElementOptions) {
                           this,
                           this.cleanups,
                           this.attributeController,
-                          this.root,
+                          () => this.root,
                           eventRecords,
                           attributes,
                           getContext(
@@ -478,15 +486,17 @@ export function customElement(tagName: string, options?: CustomElementOptions) {
                           }
                         }
 
-                        private _portalMirrors = new Map<Node, ReturnType<typeof mirroredNode>>();
+                        private _portalMirrors: Map<Node, ReturnType<typeof mirroredNode>> | null = null;
                         private _cloneChildrenIntoPortal() {
                           if (!childrenPortal) {
                             return;
                           }
 
-                          for (const [child, mirror] of this._portalMirrors) {
+                          const portalMirrors = this._portalMirrors ??= new Map();
+
+                          for (const [child, mirror] of portalMirrors) {
                             if (child.parentNode !== this) {
-                              this._portalMirrors.delete(child);
+                              portalMirrors.delete(child);
                               mirror.remove();
                               const mirrorNode = mirror.current();
                               // only ever touch the mirror node while it
@@ -506,8 +516,8 @@ export function customElement(tagName: string, options?: CustomElementOptions) {
                             if (nodeHasClassName(child, "_wc_toolkit_content_container")) {
                               continue;
                             }
-                            if (!this._portalMirrors.has(child)) {
-                              this._portalMirrors.set(child, mirroredNode(child as Element));
+                            if (!portalMirrors.has(child)) {
+                              portalMirrors.set(child, mirroredNode(child as Element));
                             }
                           }
 
@@ -520,7 +530,7 @@ export function customElement(tagName: string, options?: CustomElementOptions) {
                             if (nodeHasClassName(child, "_wc_toolkit_content_container")) {
                               continue;
                             }
-                            desired.push(this._portalMirrors.get(child)!.current());
+                            desired.push(portalMirrors.get(child)!.current());
                           }
 
                           const current = this.childrenContainer.childNodes;

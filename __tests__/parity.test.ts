@@ -1054,4 +1054,108 @@ describe("parity lock", () => {
       document.createElement("g4-elem-1");
     });
   });
+
+  describe("lazy root structures (plan G6 lock)", () => {
+    it("noContent component: attach before connect leaves the content in a detached root div, never in the element", () => {
+      const { CustomElement } = customElement("g6-elem-1", { noContent: true })
+        .attributes()
+        .events()
+        .context()
+        .methods(api => ({
+          attachNow(content: string) {
+            api.attach(content);
+          },
+          getKids(): Array<Element | Text> {
+            return api.getChildren();
+          },
+        }))
+        .connected(() => {})
+        .register();
+
+      const elem = document.createElement("g6-elem-1") as any as InstanceType<typeof CustomElement>;
+
+      // the root div is not allocated until first use
+      expect((elem as any)._root).toBeNull();
+
+      elem.attachNow("early");
+
+      // attach allocated the root div, but it stays detached: the content
+      // ends up there and never reaches the element
+      const root = (elem as any)._root;
+      expect(root).toBeInstanceOf(HTMLDivElement);
+      expect(root.className).toBe("_wc_toolkit_content_container");
+      expect(root.style.display).toBe("contents");
+      expect(root.textContent).toBe("early");
+      expect(root.parentNode).toBeNull();
+      expect(elem.childNodes).toHaveLength(0);
+      expect(elem.textContent).toBe("");
+
+      document.body.appendChild(elem);
+
+      // connecting a noContent element does not append the root either
+      expect(elem.textContent).toBe("");
+      expect(elem.getKids()).toEqual([]);
+      expect(elem.querySelector("._wc_toolkit_content_container")).toBeNull();
+
+      // a second attach reuses the same detached root div
+      elem.attachNow("late");
+      expect((elem as any)._root).toBe(root);
+      expect(root.textContent).toBe("earlylate");
+      expect(elem.textContent).toBe("");
+    });
+
+    it("shadowRoot component has elem.shadowRoot immediately after createElement, with the configured mode", () => {
+      const { CustomElement } = customElement("g6-elem-2", { shadowRoot: true })
+        .attributes()
+        .events()
+        .context()
+        .methods()
+        .connected(() => {})
+        .register();
+
+      const elem = document.createElement("g6-elem-2") as any;
+
+      expect(elem.shadowRoot).toBeInstanceOf(ShadowRoot);
+      expect(elem.shadowRoot.mode).toBe("open");
+      expect(elem.shadowRoot.childNodes).toHaveLength(0);
+
+      const { CustomElement: ClosedElement } = customElement("g6-elem-3", {
+        shadowRoot: true,
+        shadowRootInit: { mode: "closed" },
+      })
+        .attributes()
+        .events()
+        .context()
+        .methods()
+        .connected(() => {})
+        .register();
+      void ClosedElement;
+
+      const closedElem = document.createElement("g6-elem-3") as any;
+      // closed mode hides the shadow root from the host element per spec
+      expect(closedElem.shadowRoot).toBeNull();
+    });
+
+    it("non-shadow root div is allocated on connect, not at createElement", () => {
+      const { CustomElement } = customElement("g6-elem-4")
+        .attributes()
+        .events()
+        .context()
+        .methods()
+        .connected(() => {})
+        .register();
+
+      const elem = document.createElement("g6-elem-4") as any as InstanceType<typeof CustomElement>;
+
+      expect(elem.shadowRoot).toBeNull();
+      expect((elem as any)._root).toBeNull();
+
+      document.body.appendChild(elem);
+
+      const root = (elem as any)._root;
+      expect(root).toBeInstanceOf(HTMLDivElement);
+      expect(root.className).toBe("_wc_toolkit_content_container");
+      expect(root.parentNode).toBe(elem);
+    });
+  });
 });

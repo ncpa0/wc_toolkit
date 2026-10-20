@@ -86,7 +86,7 @@ export class MethodsApi<
   private readonly _thisElement: HTMLElement;
   private readonly cleanups: CleanupController;
   protected readonly attributeController: AttributeController;
-  protected readonly root: HTMLElement | ShadowRoot;
+  private readonly getRoot: () => HTMLElement | ShadowRoot;
   protected readonly eventsRecord: Evnts;
   private readonly getChildrenPortal: () => HTMLDivElement;
   private readonly childrenChangeCallbacks: Array<(children: Array<Element | Text>) => void> = [];
@@ -97,7 +97,7 @@ export class MethodsApi<
     thisElement: HTMLElement,
     cleanups: CleanupController,
     attributeController: AttributeController,
-    root: HTMLElement | ShadowRoot,
+    getRoot: () => HTMLElement | ShadowRoot,
     eventsRecord: Evnts,
     attributes: Attr,
     context: Ctx,
@@ -107,7 +107,7 @@ export class MethodsApi<
     this._thisElement = thisElement;
     this.cleanups = cleanups;
     this.attributeController = attributeController;
-    this.root = root;
+    this.getRoot = getRoot;
     this.eventsRecord = eventsRecord;
     this.getChildrenPortal = getChildrenPortal;
     this.context = context;
@@ -133,6 +133,10 @@ export class MethodsApi<
 
   get childrenPortal(): HTMLDivElement {
     return this.getChildrenPortal();
+  }
+
+  protected get root(): HTMLElement | ShadowRoot {
+    return this.getRoot();
   }
 
   /**

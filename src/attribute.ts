@@ -184,35 +184,58 @@ export class AttributeController {
   private attributesApiCache: Record<string, Attribute<string, any>> | null = null;
   /**
    * Listener-name → slot index. Seeded with the definition-time indexes
-   * (see `attrListenerNameIndexes` in `customElement().connected()`),
-   * names outside the definition get appended slots.
+   * (see `attrListenerNameIndexes` in `customElement().connected()`);
+   * read-only, no per-instance copy is taken.
    */
-  private readonly listenerNameIndexes: Map<string, number>;
+  private readonly listenerNameIndexes: ReadonlyMap<string, number>;
+  /**
+   * Names outside the definition get appended slots here; the map and its
+   * starting index are only computed when such a name first registers.
+   */
+  private ownNameIndexes: Map<string, number> | null = null;
+  private nextFreeIndex: number | null = null;
   /**
    * Listener arrays indexed by the definition-time attribute index;
    * slots are created on first use.
    */
   private readonly listenerSlots: Array<Array<AttrListenerEntry> | undefined> = [];
-  private nextFreeIndex = 0;
 
   constructor(
     public readonly element: HTMLElement,
     listenerNameIndexes?: ReadonlyMap<string, number>,
   ) {
-    this.listenerNameIndexes = listenerNameIndexes === undefined ? new Map() : new Map(listenerNameIndexes);
-    let next = 0;
-    for (const index of this.listenerNameIndexes.values()) {
-      if (index >= next) next = index + 1;
+    this.listenerNameIndexes = listenerNameIndexes ?? new Map();
+  }
+
+  private getListenerIndex(attributeName: string): number {
+    const defined = this.listenerNameIndexes.get(attributeName);
+    if (defined !== undefined) {
+      return defined;
     }
-    this.nextFreeIndex = next;
+    const own = (this.ownNameIndexes ??= new Map());
+    let index = own.get(attributeName);
+    if (index === undefined) {
+      let next = this.nextFreeIndex;
+      if (next === null) {
+        next = 0;
+        for (const index_ of this.listenerNameIndexes.values()) {
+          if (index_ >= next) next = index_ + 1;
+        }
+      }
+      own.set(attributeName, next);
+      this.nextFreeIndex = next + 1;
+      index = next;
+    }
+    return index;
+  }
+
+  private peekListenerIndex(attributeName: string): number | undefined {
+    const defined = this.listenerNameIndexes.get(attributeName);
+    return defined !== undefined ? defined : this.ownNameIndexes?.get(attributeName);
   }
 
   private getListeners(attributeName: string): Array<AttrListenerEntry> {
-    let index = this.listenerNameIndexes.get(attributeName);
-    if (index === undefined) {
-      index = this.nextFreeIndex++;
-      this.listenerNameIndexes.set(attributeName, index);
-    }
+    const index = this.getListenerIndex(attributeName);
     let listeners = this.listenerSlots[index];
     if (listeners === undefined) {
       listeners = [];
@@ -266,7 +289,7 @@ export class AttributeController {
     const proxy = this.getProxy(name);
     proxy?.["clearMemo"]();
 
-    const index = this.listenerNameIndexes.get(name);
+    const index = this.peekListenerIndex(name);
     const listeners = index === undefined ? undefined : this.listenerSlots[index];
     if (listeners === undefined || listeners.length === 0) {
       return;
@@ -332,7 +355,7 @@ export class AttributeController {
     attributeName: string,
     listener: AttrChangeListener,
   ) {
-    const index = this.listenerNameIndexes.get(attributeName);
+    const index = this.peekListenerIndex(attributeName);
     const listeners = index === undefined ? undefined : this.listenerSlots[index];
     if (listeners === undefined) return;
 

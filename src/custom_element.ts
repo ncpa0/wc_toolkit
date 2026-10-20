@@ -201,7 +201,15 @@ export function customElement(tagName: string, options?: CustomElementOptions) {
                         static readonly observedAttributes = observedAttributes;
                         readonly attributeNames = observedAttributes;
 
-                        private readonly childrenContainer = document.createElement("div");
+                        private _childrenContainer: HTMLDivElement | null = null;
+                        private get childrenContainer(): HTMLDivElement {
+                          if (this._childrenContainer === null) {
+                            const container = document.createElement("div");
+                            container.className = "_wc_toolkit_children_container";
+                            this._childrenContainer = container;
+                          }
+                          return this._childrenContainer;
+                        }
                         private readonly root: HTMLElement | ShadowRoot = getRoot(this);
 
                         private readonly attributeController = new AttributeController(this);
@@ -226,7 +234,7 @@ export function customElement(tagName: string, options?: CustomElementOptions) {
                           this._context,
                           this._methods,
                           this.root,
-                          this.childrenContainer,
+                          () => this.childrenContainer,
                           eventRecords,
                           attributes,
                         );
@@ -235,8 +243,6 @@ export function customElement(tagName: string, options?: CustomElementOptions) {
 
                         constructor() {
                           super();
-
-                          this.childrenContainer.className = "_wc_toolkit_children_container";
 
                           for (const key in this._methods) {
                             Object.defineProperty(this, key, {

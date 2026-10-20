@@ -55,7 +55,7 @@ export class ConnectedCallbackApi<
     public readonly context: Ctx,
     public readonly method: Methods,
     root: HTMLElement | ShadowRoot,
-    public readonly childrenPortal: HTMLDivElement,
+    private readonly getChildrenPortal: () => HTMLDivElement,
     protected readonly eventsRecord: Evnts,
     attributes: Attr,
   ) {
@@ -64,6 +64,10 @@ export class ConnectedCallbackApi<
       this.childrenChangeCallbacks.splice(0, this.childrenChangeCallbacks.length);
       this.readyCallbacks.splice(0, this.readyCallbacks.length);
     });
+  }
+
+  get childrenPortal(): HTMLDivElement {
+    return this.getChildrenPortal();
   }
 
   private getHandler(v: unknown): DependencyHandler<any> {

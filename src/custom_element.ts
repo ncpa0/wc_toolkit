@@ -12,7 +12,7 @@ import {
   EventAttributeAcessors,
   PublicMethods,
 } from "./type.utils";
-import { ALL_BROWSER_EVENTS_SET, mirroredNode, toAttributeName } from "./utils";
+import { ALL_BROWSER_EVENTS_SET, mirroredNode, nodeHasClassName, toAttributeName } from "./utils";
 
 export type CustomElementOptions = {
   childrenPortal?: boolean;
@@ -337,21 +337,62 @@ export function customElement(tagName: string, options?: CustomElementOptions) {
                           }
                         }
 
-                        private _portalCleanups: Array<() => void> = [];
+                        private _portalMirrors = new Map<Node, ReturnType<typeof mirroredNode>>();
                         private _cloneChildrenIntoPortal() {
-                          this._portalCleanups
-                            .splice(0, this._portalCleanups.length)
-                            .forEach((cleanup) => cleanup());
+                          if (!childrenPortal) {
+                            return;
+                          }
 
-                          if (childrenPortal) {
-                            this.childrenContainer.innerHTML = "";
-                            for (const child of this.childNodes as any as Array<Element>) {
-                              if ("classList" in child && child.classList.contains("_wc_toolkit_content_container")) {
-                                continue;
+                          // Drop mirrors whose child is no longer a child of this element:
+                          // disconnect the child's observer and remove the mirror node from the portal.
+                          for (const [child, mirror] of this._portalMirrors) {
+                            if (child.parentNode !== this) {
+                              this._portalMirrors.delete(child);
+                              mirror.remove();
+                              const mirrorNode = mirror.current();
+                              mirrorNode.parentNode?.removeChild(mirrorNode);
+                            }
+                          }
+
+                          // Reuse existing mirrors, create mirrors for new children.
+                          for (const child of this.childNodes as any as Array<Element>) {
+                            if (nodeHasClassName(child, "_wc_toolkit_content_container")) {
+                              continue;
+                            }
+                            if (!this._portalMirrors.has(child)) {
+                              this._portalMirrors.set(child, mirroredNode(child));
+                            }
+                          }
+
+                          // Desired portal contents in child order.
+                          const desired: Node[] = [];
+                          for (const child of this.childNodes as any as Array<Element>) {
+                            if (nodeHasClassName(child, "_wc_toolkit_content_container")) {
+                              continue;
+                            }
+                            desired.push(this._portalMirrors.get(child)!.current());
+                          }
+
+                          // Only touch the DOM when order/membership actually differs.
+                          const current = this.childrenContainer.childNodes;
+                          let matches = current.length === desired.length;
+                          if (matches) {
+                            for (let i = 0; i < desired.length; i++) {
+                              if (current[i] !== desired[i]) {
+                                matches = false;
+                                break;
                               }
-                              const mirrored = mirroredNode(child);
-                              this.childrenContainer.appendChild(mirrored.current());
-                              this._portalCleanups.push(mirrored.remove);
+                            }
+                          }
+                          if (!matches) {
+                            const desiredSet = new Set<Node>(desired);
+                            for (const node of Array.from(current)) {
+                              if (!desiredSet.has(node)) {
+                                node.remove();
+                              }
+                            }
+                            for (const node of desired) {
+                              this.childrenContainer.appendChild(node);
                             }
                           }
                         }

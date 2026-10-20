@@ -1,11 +1,38 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Attribute, AttributeController } from "../src/attribute";
+import { CleanupController } from "../src/cleanup_controller";
 import { customElement } from "../src/index";
 import { registerDependencyHandler } from "../src/main_fn_api";
 
 const sleep = (ms: number = 0) => new Promise(resolve => setTimeout(resolve, ms));
 
 describe("parity lock", () => {
+  describe("CleanupController", () => {
+    it("visits cleanups pushed during runCleanups and drops the once ones", () => {
+      const controller = new CleanupController();
+      const calls: string[] = [];
+
+      controller.once(() => {
+        calls.push("outer once");
+        controller.once(() => {
+          calls.push("inner once");
+        });
+        controller.add(() => {
+          calls.push("inner add");
+        });
+      });
+
+      controller.runCleanups();
+      // the run loop visits entries pushed during the run, then drops
+      // the once ones
+      expect(calls).toEqual(["outer once", "inner once", "inner add"]);
+
+      calls.length = 0;
+      controller.runCleanups();
+      expect(calls).toEqual(["inner add"]);
+    });
+  });
+
   describe("method property descriptors", () => {
     it("methods are own, non-enumerable, non-configurable, non-writable properties", () => {
       const { CustomElement } = customElement("parity-elem-1")
@@ -212,6 +239,26 @@ describe("parity lock", () => {
       // no dispatch when the value did not change
       controller.attributeChangedCallback("foo", "b", "b");
       expect(received).toHaveLength(1);
+    });
+
+    it("dispatches to listeners registered with options and to plain listeners for the same name", () => {
+      const elem = document.createElement("div");
+      const controller = new AttributeController(elem);
+
+      const plainCalls = vi.fn();
+      const optionsCalls = vi.fn();
+      controller.addEventListener("foo", plainCalls);
+      controller.addEventListener("foo", optionsCalls, { capture: false });
+
+      controller.attributeChangedCallback("foo", "a", "b");
+      expect(plainCalls).toHaveBeenCalledTimes(1);
+      expect(optionsCalls).toHaveBeenCalledTimes(1);
+
+      // removing the plain listener stops its calls
+      controller.removeEventListener("foo", plainCalls);
+      controller.attributeChangedCallback("foo", "b", "c");
+      expect(plainCalls).toHaveBeenCalledTimes(1);
+      expect(optionsCalls).toHaveBeenCalledTimes(2);
     });
   });
 

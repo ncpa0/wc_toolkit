@@ -242,6 +242,8 @@ export function customElement(tagName: string, options?: CustomElementOptions) {
                           }
 
                           for (const key in attributes) {
+                            // match Object.entries semantics: only own enumerable keys
+                            if (!Object.prototype.hasOwnProperty.call(attributes, key)) continue;
                             const value = attributes[key]!;
                             if (key in this) {
                               console.warn(

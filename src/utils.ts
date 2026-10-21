@@ -1,3 +1,7 @@
+/**
+ * Creates a clone of the given node that updates automatically to
+ * reflect the original whenever the original changes.
+ */
 export const mirroredNode = (node: Element) => {
   let clone = node.cloneNode(true);
   const observer = new MutationObserver((mutations) => {
@@ -35,6 +39,19 @@ export function nodeHasClassName(node: Node, className: string): boolean {
   return node.nodeType === Node.ELEMENT_NODE && (node as Element).classList.contains(className);
 }
 
+/**
+ * A helper class for serializinf and deserializing lists into strings.
+ *
+ * This is what wc_toolkit uses for attributes with list values (e.g. attributes({ myAttribute: "string[]" }))
+ *
+ * @example
+ *
+ * ListSerializer.intoString([1, 500, "hello", "foo,bar"])
+ * -> "1,500,hello,foo\\,bar"
+ *
+ * ListSerializer.fromString("1,500,hello,foo\\,bar")
+ * -> ["1", "500", "hello", "foo,bar"]
+ */
 export class ListSerializer {
   static intoString(list: any[]): string {
     return list.map(elem => {
@@ -262,6 +279,10 @@ export const ALL_BROWSER_EVENTS = [
 
 export const ALL_BROWSER_EVENTS_SET = new Set(ALL_BROWSER_EVENTS);
 
+/**
+ * Runs the given function inside a try-catch block and print errors to the console if any,
+ * and swallows the error.
+ */
 export function nofail(fn: () => any) {
   try {
     fn();

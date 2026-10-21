@@ -1,6 +1,17 @@
 export { Attribute } from "./attribute";
 export { customElement } from "./custom_element";
 export { registerDependencyHandler } from "./main_fn_api";
+export {
+  addNextMicrotaskCallback,
+  ALL_BROWSER_EVENTS,
+  ALL_BROWSER_EVENTS_SET,
+  ListSerializer,
+  mirroredNode,
+  nodeHasClassName,
+  nofail,
+  toAttributeName,
+  toCamelCase,
+} from "./utils";
 
 export type { AttrChangeListener, AttributeController } from "./attribute";
 export type {

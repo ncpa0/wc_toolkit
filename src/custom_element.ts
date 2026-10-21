@@ -13,7 +13,13 @@ import {
   EventAttributeAcessors,
   PublicMethods,
 } from "./type.utils";
-import { ALL_BROWSER_EVENTS_SET, mirroredNode, nodeHasClassName, toAttributeName } from "./utils";
+import {
+  addNextMicrotaskCallback,
+  ALL_BROWSER_EVENTS_SET,
+  mirroredNode,
+  nodeHasClassName,
+  toAttributeName,
+} from "./utils";
 
 export type CustomElementOptions = {
   /**
@@ -639,7 +645,7 @@ export function customElement(tagName: string, options?: CustomElementOptions) {
                           }
 
                           if (observeChildren || this._api.hasReadyCallbacks()) {
-                            setTimeout(() => {
+                            addNextMicrotaskCallback(() => {
                               this._api["triggerChildrenChange"](true);
                               this._api["triggerReadyCallbacks"]();
                             });

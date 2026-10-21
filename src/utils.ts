@@ -209,3 +209,22 @@ export function nofail(fn: () => any) {
     console.error(err);
   }
 }
+
+const pendingMicrotaskCallbacks: Array<() => void> = [];
+let microtaskBatchScheduled = false;
+
+/**
+ * Batches every callback added before the flush into a single microtask,
+ * executed in registration order.
+ */
+export function addNextMicrotaskCallback(cb: () => void) {
+  pendingMicrotaskCallbacks.push(cb);
+  if (microtaskBatchScheduled) return;
+  microtaskBatchScheduled = true;
+  queueMicrotask(() => {
+    microtaskBatchScheduled = false;
+    for (const pending of pendingMicrotaskCallbacks.splice(0)) {
+      nofail(pending);
+    }
+  });
+}

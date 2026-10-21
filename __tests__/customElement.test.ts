@@ -705,4 +705,63 @@ describe("customElement", () => {
       "ready 2",
     ]);
   });
+
+  it("parent onReady and onChildrenChange run after all child components are initiated", async () => {
+    const initOrder: string[] = [];
+    const parentObservations: string[] = [];
+
+    // the child initializes itself in its own connectedCallback, which fires
+    // only after the parent's connectedCallback has already returned
+    customElement("custom-elem-test11")
+      .attributes({ childState: "string" })
+      .events()
+      .context(() => ({}))
+      .methods(() => ({}))
+      .connected(api => {
+        initOrder.push("child connected");
+        api.attribute.childState.set("initialized");
+        (api.thisElement as any).initProp = "child-ready";
+      })
+      .register();
+
+    customElement("custom-elem-test12")
+      .attributes({})
+      .events()
+      .context(() => ({}))
+      .methods(() => ({}))
+      .connected(api => {
+        initOrder.push("parent connected");
+
+        api.onChildrenChange(children => {
+          const child = children[0] as any;
+          parentObservations.push(
+            `children: attr=${child?.getAttribute("childstate")} prop=${child?.initProp}`,
+          );
+        });
+
+        api.onReady(() => {
+          const child = api.getChildren()[0] as any;
+          parentObservations.push(
+            `ready: attr=${child?.getAttribute("childstate")} prop=${child?.initProp}`,
+          );
+        });
+      })
+      .register();
+
+    const parent = document.createElement("custom-elem-test12");
+    const child = document.createElement("custom-elem-test11");
+    parent.appendChild(child);
+    document.body.appendChild(parent);
+
+    await sleep(1);
+
+    expect(initOrder).toEqual(["parent connected", "child connected"]);
+    // ...yet the parent's deferred callbacks saw the child's post-connected state
+    expect(parentObservations).toEqual([
+      "children: attr=initialized prop=child-ready",
+      "ready: attr=initialized prop=child-ready",
+    ]);
+
+    parent.remove();
+  });
 });

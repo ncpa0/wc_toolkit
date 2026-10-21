@@ -163,22 +163,28 @@ describe("parity lock", () => {
       const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
       try {
+        // native event names are classified as browser events and get no
+        // custom accessor, so the collision is exercised via an attribute key
         const { CustomElement } = customElement("parity-elem-4")
-          .attributes({ title: "string" })
-          .events({ compositionend: Event })
+          .attributes({ title: "string", oncustomevent: "string" })
+          .events({ customevent: Event })
           .context()
           .methods()
           .connected(() => {})
           .register();
 
-        expect(CustomElement.observedAttributes).toEqual(["title", "oncompositionend"]);
+        expect(CustomElement.observedAttributes).toEqual([
+          "title",
+          "oncustomevent",
+          "oncustomevent",
+        ]);
 
         expect(warnSpy).toHaveBeenCalledTimes(2);
         expect(warnSpy).toHaveBeenCalledWith(
           "Property 'title' already exists on the HTMLElement, cannot assign attribute accessor. [parity-elem-4]",
         );
         expect(warnSpy).toHaveBeenCalledWith(
-          "Property 'oncompositionend' already exists on the HTMLElement, cannot assign event callback accessor. [parity-elem-4]",
+          "Property 'oncustomevent' already exists on the HTMLElement, cannot assign event callback accessor. [parity-elem-4]",
         );
 
         // creating instances adds no further warns

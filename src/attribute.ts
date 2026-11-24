@@ -21,7 +21,7 @@ export class Attribute<K extends string, T> {
     controller: AttributeController,
     attrType: LiteralType,
     key: K,
-    options?: AttrOptions,
+    options?: AttrOptions<LiteralType>,
   ) => {
     return new Attribute(controller, attrType, key, options);
   };
@@ -32,7 +32,7 @@ export class Attribute<K extends string, T> {
       controller: AttributeController,
       attrType: LiteralType,
       key: K,
-      options?: AttrOptions,
+      options?: AttrOptions<LiteralType>,
     ) => {
       return new NewConstructor(controller, attrType, key, options);
     };
@@ -46,7 +46,7 @@ export class Attribute<K extends string, T> {
     private readonly controller: AttributeController,
     protected readonly attrType: LiteralType,
     public readonly propName: K,
-    protected readonly options?: AttrOptions,
+    protected readonly options?: AttrOptions<LiteralType>,
   ) {
     this.attrKey = options?.htmlName ?? toAttributeName(this.propName);
     this.onCreatedCallback();
@@ -63,6 +63,9 @@ export class Attribute<K extends string, T> {
     let result: any;
 
     if (value == null) {
+      if (this.options?.default != null) {
+        return this.options.default;
+      }
       if (this.attrType === "boolean") {
         return false as any;
       }
@@ -140,7 +143,7 @@ export class Attribute<K extends string, T> {
     // memoized values go stale for `observe: false` attributes after an
     // external `setAttribute` — nothing clears the memo; deliberate
     if (this.memoHasValue) return this.valueMemo;
-    const result = this.stringToAttrType(this.controller.get(this.attrKey)!);
+    const result = this.stringToAttrType(this.controller.get(this.attrKey));
     this.valueMemo = result;
     this.memoHasValue = true;
     return result;
@@ -152,6 +155,9 @@ export class Attribute<K extends string, T> {
     this.memoHasValue = true;
     if (stringified != null) {
       this.controller.set(this.attrKey, stringified);
+    } else if (value === false && this.attrType === "boolean" && this.options?.default != null) {
+      // a false boolean can't be expressed by removing the attribute — absence means the default applies
+      this.controller.set(this.attrKey, "false");
     } else {
       this.unset();
     }
@@ -246,7 +252,7 @@ export class AttributeController {
 
   getAttributesApi<Attr extends AttributesDefinitions>(
     attributes: Attr,
-    attributeOptions?: AttributeOptionsMap<keyof Attr>,
+    attributeOptions?: AttributeOptionsMap<Attr>,
   ) {
     if (this.attributesApiCache === null) {
       this.attributesApiCache = Object.fromEntries(
@@ -266,7 +272,7 @@ export class AttributeController {
   getOrCreateProxy<L extends LiteralType>(
     attrName: string,
     attrType: L,
-    attributeOptions?: AttributeOptionsMap<string>,
+    attributeOptions?: AttributeOptionsMap<any>,
   ): Attribute<string, TypeForLiteral<L>> {
     let p = this.attrProxies.get(attrName);
     if (!p) {

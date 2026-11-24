@@ -12,6 +12,7 @@ import {
   EvenListenerFunctions,
   EventAttributeAcessors,
   PublicMethods,
+  TypeForLiteral,
 } from "./type.utils";
 import {
   addNextMicrotaskCallback,
@@ -185,7 +186,7 @@ const ELEMENT_OWN_NAMES = new Set([
   "_cloneChildrenIntoPortal",
 ]);
 
-export type AttrOptions = {
+export type AttrOptions<T extends LiteralType> = {
   /**
    * Override the attribute name as used in the HTML. By default the
    * property name provided is stripped of special characters and all
@@ -200,10 +201,11 @@ export type AttrOptions = {
    * @default true
    */
   observe?: boolean;
+  default?: TypeForLiteral<T>;
 };
 
-export type AttributeOptionsMap<AttrKeys extends string | number | symbol> = {
-  [K in AttrKeys]?: AttrOptions;
+export type AttributeOptionsMap<Attrs extends AttributesDefinitions> = {
+  [K in keyof Attrs]?: AttrOptions<Attrs[K]>;
 };
 
 export function customElement(tagName: string, options?: CustomElementOptions) {
@@ -221,7 +223,7 @@ export function customElement(tagName: string, options?: CustomElementOptions) {
      */
     attributes<Attr extends AttributesDefinitions = {}>(
       attributes: Attr = {} as Attr,
-      attributeOptions?: AttributeOptionsMap<keyof Attr>,
+      attributeOptions?: AttributeOptionsMap<Attr>,
     ) {
       return {
         /**
@@ -271,6 +273,7 @@ export function customElement(tagName: string, options?: CustomElementOptions) {
                           index,
                           htmlName: options?.htmlName ?? toAttributeName(key),
                           observed: options?.observe !== false,
+                          default: options?.default,
                         };
                       });
 
